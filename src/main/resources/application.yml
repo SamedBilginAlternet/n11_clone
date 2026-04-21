@@ -21,6 +21,23 @@ jwt:
   access-token-expiry: ${JWT_ACCESS_TOKEN_EXPIRY:900000}
   refresh-token-expiry: ${JWT_REFRESH_TOKEN_EXPIRY:604800000}
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info
+  endpoint:
+    health:
+      show-details: when-authorized
+  info:
+    env:
+      enabled: true
+
+info:
+  app:
+    name: JWT Refresh Token API
+    version: 1.0.0
+
 logging:
   pattern:
     console: "%d{HH:mm:ss} [%X{correlationId}] %-5level %logger{36} - %msg%n"

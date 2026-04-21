@@ -74,6 +74,12 @@
             <optional>true</optional>
         </dependency>
 
+        <!-- Actuator -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
         <!-- Flyway database migrations -->
         <dependency>
             <groupId>org.flywaydb</groupId>
