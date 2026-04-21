@@ -1,14 +1,14 @@
 package com.example.jwtjava.dto;
 
+import com.example.jwtjava.validation.StrongPassword;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
 
 public record RegisterRequest(
         @NotBlank @Email
         String email,
 
-        @NotBlank @Size(min = 6)
+        @NotBlank @StrongPassword
         String password,
 
         @NotBlank
