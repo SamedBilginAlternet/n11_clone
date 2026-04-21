@@ -16,5 +16,11 @@ jwt:
   access-token-expiry: ${JWT_ACCESS_TOKEN_EXPIRY:900000}
   refresh-token-expiry: ${JWT_REFRESH_TOKEN_EXPIRY:604800000}
 
+logging:
+  pattern:
+    console: "%d{HH:mm:ss} [%X{correlationId}] %-5level %logger{36} - %msg%n"
+  level:
+    com.example.jwtjava: DEBUG
+
 server:
   port: 8080
