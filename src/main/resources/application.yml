@@ -1,8 +1,8 @@
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/jwtjava
-    username: postgres
-    password: postgres
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/jwtjava}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:postgres}
   jpa:
     hibernate:
       ddl-auto: update
@@ -12,9 +12,9 @@ spring:
         format_sql: true
 
 jwt:
-  secret: 3f6a2b8c1d4e5f7a9b0c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a
-  access-token-expiry: 900000        # 15 minutes in ms
-  refresh-token-expiry: 604800000    # 7 days in ms
+  secret: ${JWT_SECRET:3f6a2b8c1d4e5f7a9b0c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a}
+  access-token-expiry: ${JWT_ACCESS_TOKEN_EXPIRY:900000}
+  refresh-token-expiry: ${JWT_REFRESH_TOKEN_EXPIRY:604800000}
 
 server:
   port: 8080
