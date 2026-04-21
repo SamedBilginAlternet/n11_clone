@@ -2,6 +2,7 @@ package com.example.jwtjava.service;
 
 import com.example.jwtjava.entity.RefreshToken;
 import com.example.jwtjava.entity.User;
+import com.example.jwtjava.exception.TokenException;
 import com.example.jwtjava.repository.RefreshTokenRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -9,7 +10,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -21,13 +21,8 @@ public class RefreshTokenService {
     @Value("${jwt.refresh-token-expiry}")
     private long refreshTokenExpiry;
 
-    /**
-     * Creates a new refresh token for the user.
-     * If the user already has a refresh token, it is replaced.
-     */
     @Transactional
     public RefreshToken createRefreshToken(User user) {
-        // Revoke existing token if present
         refreshTokenRepository.revokeAllUserTokens(user);
 
         RefreshToken refreshToken = RefreshToken.builder()
@@ -39,30 +34,21 @@ public class RefreshTokenService {
         return refreshTokenRepository.save(refreshToken);
     }
 
-    /**
-     * Validates the refresh token: must exist, not expired, not revoked.
-     * Throws RuntimeException on any failure so the controller can catch it.
-     */
     public RefreshToken validateRefreshToken(String token) {
         RefreshToken refreshToken = refreshTokenRepository.findByToken(token)
-                .orElseThrow(() -> new RuntimeException("Refresh token bulunamadı."));
+                .orElseThrow(() -> new TokenException("Refresh token bulunamadı."));
 
         if (refreshToken.isRevoked()) {
-            throw new RuntimeException("Refresh token iptal edilmiş.");
+            throw new TokenException("Refresh token iptal edilmiş.");
         }
 
         if (refreshToken.isExpired()) {
-            // Auto-revoke expired token
             refreshToken.setRevoked(true);
             refreshTokenRepository.save(refreshToken);
-            throw new RuntimeException("Refresh token süresi dolmuş.");
+            throw new TokenException("Refresh token süresi dolmuş.");
         }
 
         return refreshToken;
-    }
-
-    public Optional<RefreshToken> findByToken(String token) {
-        return refreshTokenRepository.findByToken(token);
     }
 
     @Transactional

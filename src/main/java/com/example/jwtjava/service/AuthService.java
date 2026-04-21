@@ -7,6 +7,8 @@ import com.example.jwtjava.dto.RegisterRequest;
 import com.example.jwtjava.entity.RefreshToken;
 import com.example.jwtjava.entity.Role;
 import com.example.jwtjava.entity.User;
+import com.example.jwtjava.exception.ResourceNotFoundException;
+import com.example.jwtjava.exception.UserAlreadyExistsException;
 import com.example.jwtjava.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -26,7 +28,7 @@ public class AuthService {
 
     public AuthResponse register(RegisterRequest request) {
         if (userRepository.existsByEmail(request.email())) {
-            throw new RuntimeException("Bu e-posta adresi zaten kullanımda.");
+            throw new UserAlreadyExistsException(request.email());
         }
 
         User user = User.builder()
@@ -50,7 +52,7 @@ public class AuthService {
         );
 
         User user = userRepository.findByEmail(request.email())
-                .orElseThrow(() -> new RuntimeException("Kullanıcı bulunamadı."));
+                .orElseThrow(() -> new ResourceNotFoundException("Kullanıcı", request.email()));
 
         String accessToken = jwtService.generateAccessToken(user);
         RefreshToken refreshToken = refreshTokenService.createRefreshToken(user);
@@ -59,13 +61,12 @@ public class AuthService {
     }
 
     public AuthResponse refresh(RefreshRequest request) {
-        // Validate refresh token (throws if invalid/expired/revoked)
         RefreshToken storedToken = refreshTokenService.validateRefreshToken(request.refreshToken());
 
         User user = storedToken.getUser();
         String newAccessToken = jwtService.generateAccessToken(user);
 
-        // Token rotation: revoke old token, issue a fresh one
+        // Token rotation: revoke old, issue new
         refreshTokenService.revokeByToken(storedToken.getToken());
         RefreshToken newRefreshToken = refreshTokenService.createRefreshToken(user);
 
