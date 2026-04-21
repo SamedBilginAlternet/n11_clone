@@ -1,20 +1,28 @@
-# ── Stage 1: Build ──────────────────────────────────────────────────────────
-FROM maven:3.9.6-eclipse-temurin-21 AS builder
+# ── Stage 1: Dependencies (cached layer) ─────────────────────────────────────
+FROM maven:3.9.6-eclipse-temurin-21 AS deps
 
 WORKDIR /app
 COPY pom.xml .
-# Download dependencies first (cached layer)
 RUN mvn dependency:go-offline -q
+
+# ── Stage 2: Test ─────────────────────────────────────────────────────────────
+FROM deps AS test
+
+COPY src ./src
+# Uses application-test.yml (H2 in-memory) — no external DB needed
+RUN mvn test -Dspring.profiles.active=test
+
+# ── Stage 3: Build ────────────────────────────────────────────────────────────
+FROM deps AS builder
 
 COPY src ./src
 RUN mvn package -DskipTests -q
 
-# ── Stage 2: Runtime ─────────────────────────────────────────────────────────
+# ── Stage 4: Runtime ──────────────────────────────────────────────────────────
 FROM eclipse-temurin:21-jre-alpine
 
 WORKDIR /app
 
-# Create non-root user for security
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 USER appuser
 
