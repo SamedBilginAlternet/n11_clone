@@ -4,12 +4,15 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
@@ -27,7 +30,14 @@ public class JwtService {
     // ------------------------------------------------------------------
 
     public String generateAccessToken(UserDetails user) {
-        return buildToken(Map.of("roles", user.getAuthorities()), user, accessTokenExpiry);
+        // Roles are stored as plain strings so they can be read back without
+        // any extra deserialization logic.
+        // e.g. "roles": ["ROLE_USER", "ROLE_ADMIN"]
+        List<String> roles = user.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .toList();
+
+        return buildToken(Map.of("roles", roles), user, accessTokenExpiry);
     }
 
     private String buildToken(Map<String, Object> extraClaims, UserDetails user, long expiry) {
@@ -49,21 +59,32 @@ public class JwtService {
         return username.equals(user.getUsername()) && !isTokenExpired(token);
     }
 
+    // ------------------------------------------------------------------
+    // Claims extraction
+    // ------------------------------------------------------------------
+
     public String extractUsername(String token) {
         return extractClaim(token, Claims::getSubject);
+    }
+
+    /**
+     * Reads roles directly from the token — no database call needed.
+     * Returns a list of GrantedAuthority ready to set on the SecurityContext.
+     */
+    public List<GrantedAuthority> extractAuthorities(String token) {
+        List<?> roles = extractClaim(token, claims -> claims.get("roles", List.class));
+        if (roles == null) return List.of();
+        return roles.stream()
+                .map(r -> (GrantedAuthority) new SimpleGrantedAuthority(r.toString()))
+                .toList();
     }
 
     private boolean isTokenExpired(String token) {
         return extractClaim(token, Claims::getExpiration).before(new Date());
     }
 
-    // ------------------------------------------------------------------
-    // Claims extraction
-    // ------------------------------------------------------------------
-
     public <T> T extractClaim(String token, Function<Claims, T> resolver) {
-        Claims claims = extractAllClaims(token);
-        return resolver.apply(claims);
+        return resolver.apply(extractAllClaims(token));
     }
 
     private Claims extractAllClaims(String token) {
