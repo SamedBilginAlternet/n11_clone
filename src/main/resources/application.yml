@@ -4,12 +4,17 @@ spring:
     username: ${SPRING_DATASOURCE_USERNAME:postgres}
     password: ${SPRING_DATASOURCE_PASSWORD:postgres}
   jpa:
+    # Prevents binding Hibernate sessions to HTTP request threads (performance anti-pattern)
+    open-in-view: false
     hibernate:
-      ddl-auto: update
-    show-sql: true
+      ddl-auto: validate   # schema is managed by Flyway; never let Hibernate auto-alter it
+    show-sql: false
     properties:
       hibernate:
         format_sql: true
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
 
 jwt:
   secret: ${JWT_SECRET:3f6a2b8c1d4e5f7a9b0c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a}
@@ -20,7 +25,7 @@ logging:
   pattern:
     console: "%d{HH:mm:ss} [%X{correlationId}] %-5level %logger{36} - %msg%n"
   level:
-    com.example.jwtjava: DEBUG
+    com.example.jwtjava: INFO
 
 server:
   port: 8080
