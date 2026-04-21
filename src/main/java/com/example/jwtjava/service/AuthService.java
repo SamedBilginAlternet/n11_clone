@@ -65,8 +65,11 @@ public class AuthService {
         User user = storedToken.getUser();
         String newAccessToken = jwtService.generateAccessToken(user);
 
-        // Return existing refresh token (rotation strategy: keep same token)
-        return new AuthResponse(newAccessToken, storedToken.getToken());
+        // Token rotation: revoke old token, issue a fresh one
+        refreshTokenService.revokeByToken(storedToken.getToken());
+        RefreshToken newRefreshToken = refreshTokenService.createRefreshToken(user);
+
+        return new AuthResponse(newAccessToken, newRefreshToken.getToken());
     }
 
     public void logout(RefreshRequest request) {
