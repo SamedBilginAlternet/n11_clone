@@ -7,6 +7,7 @@ import com.example.jwtjava.dto.RegisterRequest;
 import com.example.jwtjava.entity.RefreshToken;
 import com.example.jwtjava.entity.Role;
 import com.example.jwtjava.entity.User;
+import java.util.EnumSet;
 import com.example.jwtjava.exception.ResourceNotFoundException;
 import com.example.jwtjava.exception.UserAlreadyExistsException;
 import com.example.jwtjava.repository.UserRepository;
@@ -35,7 +36,7 @@ public class AuthService {
                 .email(request.email())
                 .password(passwordEncoder.encode(request.password()))
                 .fullName(request.fullName())
-                .role(Role.USER)
+                .roles(EnumSet.of(Role.USER))
                 .build();
 
         userRepository.save(user);
