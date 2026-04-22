@@ -5,6 +5,7 @@ import com.example.product.dto.ProductResponse;
 import com.example.product.entity.Product;
 import com.example.product.repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -32,6 +33,7 @@ public class ProductService {
 
     private final ProductRepository productRepository;
 
+    @Cacheable(value = "products:list", key = "T(String).valueOf(#category) + ':' + T(String).valueOf(#q) + ':' + #pageable.pageNumber + ':' + #pageable.pageSize")
     public Page<ProductResponse> list(String category, String q, Pageable pageable) {
         Page<Product> page;
         if (q != null && !q.isBlank()) {
@@ -44,18 +46,21 @@ public class ProductService {
         return page.map(ProductResponse::from);
     }
 
+    @Cacheable(value = "products:byId", key = "#id")
     public ProductResponse getById(Long id) {
         return productRepository.findById(id)
                 .map(ProductResponse::from)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Ürün bulunamadı: " + id));
     }
 
+    @Cacheable(value = "products:bySlug", key = "#slug")
     public ProductResponse getBySlug(String slug) {
         return productRepository.findBySlug(slug)
                 .map(ProductResponse::from)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Ürün bulunamadı: " + slug));
     }
 
+    @Cacheable(value = "products:categories")
     public List<CategoryResponse> categories() {
         return CATEGORIES;
     }
