@@ -8,9 +8,9 @@ export const authApi = {
   login: (body: { email: string; password: string }) =>
     apiFetch<AuthTokens>('/auth/login', { method: 'POST', body: JSON.stringify(body) }, { auth: false }),
 
-  refresh: (refreshToken: string) =>
-    apiFetch<AuthTokens>('/auth/refresh', { method: 'POST', body: JSON.stringify({ refreshToken }) }, { auth: false }),
+  refresh: () =>
+    apiFetch<AuthTokens>('/auth/refresh', { method: 'POST' }, { auth: false }),
 
-  logout: (refreshToken: string) =>
-    apiFetch<void>('/auth/logout', { method: 'POST', body: JSON.stringify({ refreshToken }) }, { auth: false }),
+  logout: () =>
+    apiFetch<void>('/auth/logout', { method: 'POST' }, { auth: false }),
 };

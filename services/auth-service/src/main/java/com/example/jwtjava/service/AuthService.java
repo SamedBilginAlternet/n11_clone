@@ -1,13 +1,10 @@
 package com.example.jwtjava.service;
 
-import com.example.jwtjava.dto.AuthResponse;
 import com.example.jwtjava.dto.LoginRequest;
-import com.example.jwtjava.dto.RefreshRequest;
 import com.example.jwtjava.dto.RegisterRequest;
 import com.example.jwtjava.entity.RefreshToken;
 import com.example.jwtjava.entity.Role;
 import com.example.jwtjava.entity.User;
-import java.util.EnumSet;
 import com.example.jwtjava.exception.ResourceNotFoundException;
 import com.example.jwtjava.exception.UserAlreadyExistsException;
 import com.example.jwtjava.repository.UserRepository;
@@ -18,6 +15,8 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+
+import java.util.EnumSet;
 
 @Service
 @RequiredArgsConstructor
@@ -30,7 +29,9 @@ public class AuthService {
     private final AuthenticationManager authenticationManager;
     private final SagaEventPublisher sagaEventPublisher;
 
-    public AuthResponse register(RegisterRequest request) {
+    public record TokenPair(String accessToken, String refreshToken) {}
+
+    public TokenPair register(RegisterRequest request) {
         if (userRepository.existsByEmail(request.email())) {
             throw new UserAlreadyExistsException(request.email());
         }
@@ -44,19 +45,14 @@ public class AuthService {
 
         userRepository.save(user);
 
-        // Kick off the registration saga — basket-service will create an empty
-        // basket for this user, and compensate back to us if it fails.
         sagaEventPublisher.publishUserRegistered(
                 UserRegisteredEvent.of(user.getId(), user.getEmail(), user.getFullName())
         );
 
-        String accessToken = jwtService.generateAccessToken(user);
-        RefreshToken refreshToken = refreshTokenService.createRefreshToken(user);
-
-        return new AuthResponse(accessToken, refreshToken.getToken());
+        return issueTokens(user);
     }
 
-    public AuthResponse login(LoginRequest request) {
+    public TokenPair login(LoginRequest request) {
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(request.email(), request.password())
         );
@@ -64,26 +60,26 @@ public class AuthService {
         User user = userRepository.findByEmail(request.email())
                 .orElseThrow(() -> new ResourceNotFoundException("Kullanıcı", request.email()));
 
-        String accessToken = jwtService.generateAccessToken(user);
-        RefreshToken refreshToken = refreshTokenService.createRefreshToken(user);
-
-        return new AuthResponse(accessToken, refreshToken.getToken());
+        return issueTokens(user);
     }
 
-    public AuthResponse refresh(RefreshRequest request) {
-        RefreshToken storedToken = refreshTokenService.validateRefreshToken(request.refreshToken());
+    public TokenPair refresh(String refreshTokenValue) {
+        RefreshToken storedToken = refreshTokenService.validateRefreshToken(refreshTokenValue);
 
         User user = storedToken.getUser();
-        String newAccessToken = jwtService.generateAccessToken(user);
 
-        // Token rotation: revoke old, issue new
         refreshTokenService.revokeByToken(storedToken.getToken());
-        RefreshToken newRefreshToken = refreshTokenService.createRefreshToken(user);
 
-        return new AuthResponse(newAccessToken, newRefreshToken.getToken());
+        return issueTokens(user);
     }
 
-    public void logout(RefreshRequest request) {
-        refreshTokenService.revokeByToken(request.refreshToken());
+    public void logout(String refreshTokenValue) {
+        refreshTokenService.revokeByToken(refreshTokenValue);
+    }
+
+    private TokenPair issueTokens(User user) {
+        String accessToken = jwtService.generateAccessToken(user);
+        RefreshToken refreshToken = refreshTokenService.createRefreshToken(user);
+        return new TokenPair(accessToken, refreshToken.getToken());
     }
 }

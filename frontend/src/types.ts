@@ -48,7 +48,6 @@ export interface Basket {
 
 export interface AuthTokens {
   accessToken: string;
-  refreshToken: string;
   tokenType: string;
   expiresIn: number;
 }

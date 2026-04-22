@@ -7,7 +7,7 @@ import { NotificationBell } from '../features/notifications/NotificationBell';
 import { useToast } from '../shared/providers/ToastProvider';
 
 export function Navbar() {
-  const { email, refreshToken, clear, isAuthenticated } = useAuthStore();
+  const { email, clear, isAuthenticated } = useAuthStore();
   const { basket, setBasket } = useBasketStore();
   const navigate = useNavigate();
   const toast = useToast();
@@ -15,7 +15,7 @@ export function Navbar() {
 
   const handleLogout = async () => {
     try {
-      if (refreshToken) await authApi.logout(refreshToken);
+      await authApi.logout();
     } catch {
       /* ignore — clear local regardless */
     }

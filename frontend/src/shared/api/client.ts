@@ -43,7 +43,7 @@ export async function apiFetch<T>(
     if (token) headers.set('Authorization', `Bearer ${token}`);
   }
 
-  const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
+  const res = await fetch(`${API_BASE}${path}`, { ...init, headers, credentials: 'include' });
 
   if (res.status === 204) return undefined as T;
 
