@@ -1,0 +1,21 @@
+package com.example.payment.saga;
+
+import com.example.payment.service.PaymentProcessor;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.stereotype.Component;
+
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class OrderCreatedListener {
+
+    private final PaymentProcessor paymentProcessor;
+
+    @RabbitListener(queues = SagaTopology.ORDER_CREATED_QUEUE)
+    public void onOrderCreated(OrderCreatedEvent event) {
+        log.info("OrderCreated orderId={} amount={} — charging", event.orderId(), event.totalAmount());
+        paymentProcessor.process(event);
+    }
+}
