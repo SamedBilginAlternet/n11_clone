@@ -31,6 +31,17 @@ public class SagaRabbitConfig {
     }
 
     @Bean
+    public Queue orderConfirmedQueue() {
+        return new Queue(SagaTopology.ORDER_CONFIRMED_QUEUE, true);
+    }
+
+    @Bean
+    public Binding orderConfirmedBinding(Queue orderConfirmedQueue, TopicExchange sagaExchange) {
+        return BindingBuilder.bind(orderConfirmedQueue).to(sagaExchange)
+                .with(SagaTopology.ORDER_CONFIRMED_ROUTING_KEY);
+    }
+
+    @Bean
     public MessageConverter jsonMessageConverter() {
         return new Jackson2JsonMessageConverter();
     }

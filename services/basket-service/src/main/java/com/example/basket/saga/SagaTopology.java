@@ -14,5 +14,10 @@ public final class SagaTopology {
 
     public static final String BASKET_FAILED_ROUTING_KEY = "basket.creation.failed";
 
+    // Published by order-service after payment succeeds — we clear the user's
+    // basket so the post-checkout UI doesn't still show purchased items.
+    public static final String ORDER_CONFIRMED_ROUTING_KEY = "order.confirmed";
+    public static final String ORDER_CONFIRMED_QUEUE = "basket.order-confirmed.queue";
+
     private SagaTopology() {}
 }
