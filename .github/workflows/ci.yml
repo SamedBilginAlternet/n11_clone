@@ -28,6 +28,7 @@ jobs:
           - review-service
           - search-service
           - inventory-service
+          - eureka-server
           - api-gateway
     steps:
       - uses: actions/checkout@v4
