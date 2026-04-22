@@ -143,9 +143,7 @@ services:
       start_period: 40s
 
   auth-service:
-    build:
-      context: ./services/auth-service
-      target: builder
+    build: ./services/auth-service
     container_name: n11-auth
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/authdb
