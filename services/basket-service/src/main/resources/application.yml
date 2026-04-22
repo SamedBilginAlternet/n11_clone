@@ -40,3 +40,5 @@ server:
 logging:
   level:
     com.example.basket: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%X{correlationId:-},%X{traceId:-}] %logger{36} - %msg%n"

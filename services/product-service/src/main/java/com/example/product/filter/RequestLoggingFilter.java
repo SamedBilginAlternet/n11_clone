@@ -1,4 +1,4 @@
-package com.example.jwtjava.filter;
+package com.example.product.filter;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -14,22 +14,8 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.util.UUID;
 
-/**
- * Assigns a unique correlation ID to every request and logs method, path,
- * status, and duration. The ID is propagated via SLF4J MDC so it appears in
- * every log line emitted while the request is processed.
- *
- * Header: X-Correlation-Id (read from request if present, generated otherwise).
- * Echoed back on the response so downstream callers — and the UI — can pin a
- * complete request chain from a single ID.
- *
- * When Micrometer tracing is active, the Spring Boot logging pattern also
- * surfaces {@code traceId} + {@code spanId} alongside this correlationId, so a
- * single log line carries both the HTTP-layer request ID and the distributed-
- * tracing span.
- */
 @Component
-@Order(1)   // run before JwtAuthFilter
+@Order(1)
 @Slf4j
 public class RequestLoggingFilter extends OncePerRequestFilter {
 
@@ -42,12 +28,10 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
             @NonNull HttpServletResponse response,
             @NonNull FilterChain filterChain
     ) throws ServletException, IOException {
-
         String correlationId = request.getHeader(CORRELATION_ID_HEADER);
         if (correlationId == null || correlationId.isBlank()) {
             correlationId = UUID.randomUUID().toString();
         }
-
         MDC.put(MDC_KEY, correlationId);
         response.setHeader(CORRELATION_ID_HEADER, correlationId);
 
