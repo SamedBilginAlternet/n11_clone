@@ -40,6 +40,10 @@ spring:
           uri: ${REVIEW_SERVICE_URI:http://localhost:8086}
           predicates:
             - Path=/api/reviews/**
+        - id: search-service
+          uri: ${SEARCH_SERVICE_URI:http://localhost:8087}
+          predicates:
+            - Path=/api/search/**
         - id: auth-swagger
           uri: ${AUTH_SERVICE_URI:http://localhost:8080}
           predicates:

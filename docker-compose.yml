@@ -32,6 +32,27 @@ services:
       timeout: 5s
       retries: 5
 
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.14.0
+    container_name: n11-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - xpack.security.http.ssl.enabled=false
+      - xpack.security.transport.ssl.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    healthcheck:
+      # cluster status "yellow" is normal on a single node (no replicas).
+      test: ["CMD-SHELL", "curl -sf 'http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=2s' >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
   auth-service:
     build:
       context: ./services/auth-service
@@ -202,6 +223,27 @@ services:
       start_period: 40s
     restart: on-failure
 
+  search-service:
+    build: ./services/search-service
+    container_name: n11-search
+    environment:
+      ELASTICSEARCH_URIS: http://elasticsearch:9200
+      PRODUCT_SERVICE_URI: http://product-service:8082
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      product-service:
+        condition: service_healthy
+    expose:
+      - "8087"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8087/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 40s
+    restart: on-failure
+
   api-gateway:
     build: ./services/api-gateway
     container_name: n11-gateway
@@ -213,6 +255,7 @@ services:
       PAYMENT_SERVICE_URI: http://payment-service:8084
       NOTIFICATION_SERVICE_URI: http://notification-service:8085
       REVIEW_SERVICE_URI: http://review-service:8086
+      SEARCH_SERVICE_URI: http://search-service:8087
     depends_on:
       auth-service:
         condition: service_healthy
@@ -227,6 +270,8 @@ services:
       notification-service:
         condition: service_healthy
       review-service:
+        condition: service_healthy
+      search-service:
         condition: service_healthy
     ports:
       - "8000:8000"
@@ -244,3 +289,4 @@ services:
 
 volumes:
   postgres_data:
+  elasticsearch_data:
