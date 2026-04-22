@@ -38,6 +38,8 @@ services:
     environment:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "-rabbit vm_memory_high_watermark 0.6"
+    mem_limit: 512m
     ports:
       - "${RABBITMQ_PORT:-15672}:5672"
       - "${RABBITMQ_MGMT_PORT:-25672}:15672"
@@ -45,7 +47,8 @@ services:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 30s
 
   jaeger:
     image: jaegertracing/all-in-one:1.57
@@ -141,7 +144,7 @@ services:
       - xpack.security.enabled=false
       - xpack.security.http.ssl.enabled=false
       - xpack.security.transport.ssl.enabled=false
-      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+      - ES_JAVA_OPTS=-Xms256m -Xmx256m
     ports:
       - "${ELASTICSEARCH_PORT:-19200}:9200"
     volumes:
