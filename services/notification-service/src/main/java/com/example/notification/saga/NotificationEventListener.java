@@ -3,6 +3,7 @@ package com.example.notification.saga;
 import com.example.notification.entity.Notification;
 import com.example.notification.entity.NotificationType;
 import com.example.notification.repository.NotificationRepository;
+import com.example.notification.service.NotificationPushService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
@@ -27,6 +28,7 @@ public class NotificationEventListener {
             NumberFormat.getCurrencyInstance(Locale.forLanguageTag("tr-TR"));
 
     private final NotificationRepository repo;
+    private final NotificationPushService pushService;
 
     @RabbitListener(queues = SagaTopology.USER_REGISTERED_QUEUE)
     public void onUserRegistered(Map<String, Object> event) {
@@ -61,12 +63,13 @@ public class NotificationEventListener {
     }
 
     private void save(String email, NotificationType type, String title, String message) {
-        repo.save(Notification.builder()
+        Notification notification = repo.save(Notification.builder()
                 .userEmail(email)
                 .type(type)
                 .title(title)
                 .message(message)
                 .read(false)
                 .build());
+        pushService.pushToUser(notification);
     }
 }
