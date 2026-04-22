@@ -38,6 +38,12 @@ public class GlobalExceptionHandler {
         return respond(HttpStatus.UNAUTHORIZED, "E-posta veya şifre hatalı.", req);
     }
 
+    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    public ResponseEntity<ProblemDetail> handleAccessDenied(
+            org.springframework.security.access.AccessDeniedException ex, HttpServletRequest req) {
+        return respond(HttpStatus.FORBIDDEN, "Bu kaynağa erişim yetkiniz yok.", req);
+    }
+
     // ── Spring MVC ───────────────────────────────────────────────────────────
 
     @ExceptionHandler(HttpMessageNotReadableException.class)

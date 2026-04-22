@@ -36,7 +36,7 @@ public class RefreshTokenService {
 
     public RefreshToken validateRefreshToken(String token) {
         RefreshToken refreshToken = refreshTokenRepository.findByToken(token)
-                .orElseThrow(() -> new TokenException("Refresh token bulunamadı."));
+                .orElseThrow(() -> new TokenException("Refresh token bulunamadı.", org.springframework.http.HttpStatus.BAD_REQUEST));
 
         if (refreshToken.isRevoked()) {
             throw new TokenException("Refresh token iptal edilmiş.");
