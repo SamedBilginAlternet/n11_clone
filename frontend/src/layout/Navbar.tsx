@@ -36,7 +36,10 @@ export function Navbar() {
           className="flex-1 max-w-2xl"
           onSubmit={(e) => {
             e.preventDefault();
-            if (query.trim()) navigate(`/?q=${encodeURIComponent(query.trim())}`);
+            // Searches go to /search (Elasticsearch-backed with facets).
+            // Empty input just opens the search landing page.
+            const q = query.trim();
+            navigate(q ? `/search?q=${encodeURIComponent(q)}` : '/search');
           }}
         >
           <input

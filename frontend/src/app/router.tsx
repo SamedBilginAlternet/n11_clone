@@ -8,6 +8,7 @@ import { BasketPage } from '../features/basket/BasketPage';
 import { CheckoutPage } from '../features/orders/CheckoutPage';
 import { OrdersPage } from '../features/orders/OrdersPage';
 import { OrderDetailPage } from '../features/orders/OrderDetailPage';
+import { SearchPage } from '../features/search/SearchPage';
 import { useAuthStore } from '../features/auth/store';
 
 function RequireAuth({ children }: { children: JSX.Element }) {
@@ -21,6 +22,7 @@ export const router = createBrowserRouter([
     element: <Layout />,
     children: [
       { index: true, element: <HomePage /> },
+      { path: 'search', element: <SearchPage /> },
       { path: 'login', element: <LoginPage /> },
       { path: 'register', element: <RegisterPage /> },
       { path: 'product/:slug', element: <ProductDetailPage /> },
