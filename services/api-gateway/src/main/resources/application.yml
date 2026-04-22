@@ -24,6 +24,22 @@ spring:
           uri: ${PRODUCT_SERVICE_URI:http://localhost:8082}
           predicates:
             - Path=/api/products/**
+        - id: order-service
+          uri: ${ORDER_SERVICE_URI:http://localhost:8083}
+          predicates:
+            - Path=/api/orders/**
+        - id: payment-service
+          uri: ${PAYMENT_SERVICE_URI:http://localhost:8084}
+          predicates:
+            - Path=/api/payments/**
+        - id: notification-service
+          uri: ${NOTIFICATION_SERVICE_URI:http://localhost:8085}
+          predicates:
+            - Path=/api/notifications/**
+        - id: review-service
+          uri: ${REVIEW_SERVICE_URI:http://localhost:8086}
+          predicates:
+            - Path=/api/reviews/**
         - id: auth-swagger
           uri: ${AUTH_SERVICE_URI:http://localhost:8080}
           predicates:

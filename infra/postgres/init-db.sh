@@ -9,4 +9,8 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" <<-EOSQL
     CREATE DATABASE authdb;
     CREATE DATABASE basketdb;
     CREATE DATABASE productdb;
+    CREATE DATABASE orderdb;
+    CREATE DATABASE paymentdb;
+    CREATE DATABASE notificationdb;
+    CREATE DATABASE reviewdb;
 EOSQL
