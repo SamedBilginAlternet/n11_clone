@@ -341,7 +341,7 @@ npm run dev          # http://localhost:5173, /api proxied to :8000
 | `RABBITMQ_DEFAULT_USER` / `_PASS` | `guest` / `guest` | AMQP 5672, yönetim UI 15672. |
 | `ELASTICSEARCH_URIS` | `http://elasticsearch:9200` | search-service'in ES adresi. |
 | `PRODUCT_SERVICE_URI` | `http://product-service:8082` | search-service bootstrap indexer'ının pull hedefi. |
-| `ES_JAVA_OPTS` | `-Xms512m -Xmx512m` | ES heap. Daha az RAM'li makinelerde 256m'e düşürülebilir. |
+| `ES_JAVA_OPTS` | `-Xms256m -Xmx256m` | ES heap. |
 | `JWT_ACCESS_TOKEN_EXPIRY` | `900000` (15 dk) | Access token süresi (ms). |
 | `JWT_REFRESH_TOKEN_EXPIRY` | `604800000` (7 gün) | Refresh token süresi. |
 
@@ -390,9 +390,15 @@ Per-servis override'lar her Dockerfile/application.yml içinde dokümante edildi
 
 - JWT secret **en az 256-bit** olmalı ve ortam değişkeninden okunmalıdır.
 - Refresh token'lar auth-service DB'sinde saklanır ve her `/refresh` çağrısında **rotate**
-  edilir (eski revoke edilir + yeni üretilir).
+  edilir (eski revoke edilir + yeni üretilir). Revoke edilen tokenlar silinmez — **reuse detection**
+  için saklanır (`@ManyToOne` ilişkisi kullanıcı başına birden fazla token'a izin verir).
+- Refresh token **HttpOnly cookie** olarak döner (`Path=/api/auth`, `SameSite=Lax`).
+  JSON response body'de yalnızca `accessToken` bulunur. JavaScript refresh token'a erişemez (XSS koruması).
+  Frontend tüm fetch çağrılarında `credentials: 'include'` kullanır.
 - `/api/auth/**` üzerinde Bucket4j ile IP başına dk/10 rate limit.
 - Kayıt şifresi: **8+ karakter · büyük harf · küçük harf · rakam · özel karakter** (`@StrongPassword`).
+- `AccessDeniedException` handler'ı 403 döner (500 değil).
+- Tüm servislerde `/actuator/prometheus` endpoint'i `permitAll()` — Prometheus scrape'leri JWT gerektirmez.
 - Gateway tek giriş noktası; mikroservisler Docker ağı dışına expose edilmez.
 - Elasticsearch lokal demo için `xpack.security` kapalı çalışır — **production'da mutlaka
   TLS + credential zorunlu yap**.
@@ -473,7 +479,8 @@ Her servis her HTTP isteğini iki satır log olarak basar:
 `[correlationId, traceId]` köşeli parantez içinde:
 - **correlationId** — `RequestLoggingFilter` tarafından `X-Correlation-Id` header'ından
   ya da UUID'den atanır. Gateway'de mint edilip downstream servislere otomatik
-  propagate olur, response header'ına da geri eklenir.
+  propagate olur, **her HTTP response'ta `X-Correlation-Id` header'ı** client'a geri döner —
+  frontend veya `curl` çıktısında bu ID ile Loki'de tüm servislerdeki log'ları sorgulayabilirsin.
 - **traceId** — Micrometer tracing bridge tarafından MDC'ye konur; Jaeger span ID'si
   ile aynıdır.
 
@@ -532,7 +539,9 @@ for d in services/*/; do (cd "$d" && ./mvnw -q test); done
 
 Testler **tamamen Mockito birim testleri** — Spring context yüklemezler, DB/RabbitMQ/ES
 gerektirmezler, milisaniyeler içinde koşarlar. auth-service'in integration testleri
-`@SpringBootTest + H2` ile RFC 7807 response envelope'unu da doğrular.
+`@SpringBootTest + H2` ile RFC 7807 response envelope'unu da doğrular. Refresh ve logout
+testleri **cookie API** (`MockMvc.cookie()`) kullanır — refresh token artık JSON body'de değil,
+HttpOnly cookie'de taşınır.
 
 | Servis | Test dosyaları | Neyi pin'liyor |
 |--------|-----------------|----------------|
