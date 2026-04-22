@@ -9,6 +9,7 @@ import com.example.search.document.ProductDocument;
 import com.example.search.dto.SearchResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.elasticsearch.client.elc.NativeQuery;
+import org.springframework.data.elasticsearch.client.elc.NativeQueryBuilder;
 import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
 import org.springframework.data.elasticsearch.core.SearchHit;
 import org.springframework.data.elasticsearch.core.SearchHits;
@@ -43,7 +44,7 @@ public class SearchService {
             Double minPrice, Double maxPrice, Double minRating,
             String sort, int page, int size
     ) {
-        NativeQuery.Builder qb = NativeQuery.builder()
+        var qb = NativeQuery.builder()
                 .withPageable(org.springframework.data.domain.PageRequest.of(page, size))
                 .withTrackTotalHits(true);
 
@@ -102,7 +103,7 @@ public class SearchService {
         }));
     }
 
-    private void applySort(NativeQuery.Builder qb, String sort) {
+    private void applySort(NativeQueryBuilder qb, String sort) {
         if (sort == null) return;
         SortOptions option = switch (sort) {
             case "price_asc" -> SortOptions.of(s -> s.field(FieldSort.of(f -> f
@@ -116,7 +117,7 @@ public class SearchService {
         if (option != null) qb.withSort(option);
     }
 
-    private void addAggregations(NativeQuery.Builder qb) {
+    private void addAggregations(NativeQueryBuilder qb) {
         qb.withAggregation("brands", Aggregation.of(a -> a.terms(t -> t.field("brand").size(30))));
         qb.withAggregation("categories", Aggregation.of(a -> a.terms(t -> t.field("category").size(30))));
         qb.withAggregation("price_min", Aggregation.of(a -> a.min(m -> m.field("discountedPrice"))));

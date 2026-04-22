@@ -3,7 +3,7 @@ package com.example.payment.service;
 import com.example.payment.entity.PaymentStatus;
 import com.example.payment.entity.PaymentTransaction;
 import com.example.payment.repository.PaymentRepository;
-import com.example.payment.saga.OrderCreatedEvent;
+import com.example.payment.saga.InventoryReservedEvent;
 import com.example.payment.saga.PaymentFailedEvent;
 import com.example.payment.saga.PaymentSucceededEvent;
 import com.example.payment.saga.SagaTopology;
@@ -35,7 +35,7 @@ public class PaymentProcessor {
     private final RabbitTemplate rabbitTemplate;
 
     @Transactional
-    public void process(OrderCreatedEvent event) {
+    public void process(InventoryReservedEvent event) {
         Result result = authorize(event);
         String txnId = "TXN-" + UUID.randomUUID().toString().substring(0, 12).toUpperCase();
 
@@ -64,7 +64,7 @@ public class PaymentProcessor {
         }
     }
 
-    private Result authorize(OrderCreatedEvent e) {
+    private Result authorize(InventoryReservedEvent e) {
         if (e.userEmail() != null && e.userEmail().toLowerCase().contains("fail")) {
             return new Result(false, "Kart reddedildi (demo).");
         }
