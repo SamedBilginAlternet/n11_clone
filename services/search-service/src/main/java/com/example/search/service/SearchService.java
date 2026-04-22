@@ -13,11 +13,10 @@ import org.springframework.data.elasticsearch.client.elc.NativeQueryBuilder;
 import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
 import org.springframework.data.elasticsearch.core.SearchHit;
 import org.springframework.data.elasticsearch.core.SearchHits;
-import org.springframework.data.elasticsearch.core.query.Query.SearchType;
 import org.springframework.stereotype.Service;
 
-import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -35,11 +34,29 @@ import java.util.Map;
  */
 @Service
 @RequiredArgsConstructor
+@lombok.extern.slf4j.Slf4j
 public class SearchService {
+
+    private static final SearchResponse EMPTY = new SearchResponse(
+            List.of(), 0, 0, 0, 0,
+            new SearchResponse.Facets(Map.of(), Map.of(), new SearchResponse.PriceStats(0, 0)));
 
     private final ElasticsearchOperations operations;
 
     public SearchResponse search(
+            String q, String category, String brand,
+            Double minPrice, Double maxPrice, Double minRating,
+            String sort, int page, int size
+    ) {
+        try {
+            return doSearch(q, category, brand, minPrice, maxPrice, minRating, sort, page, size);
+        } catch (Exception ex) {
+            log.warn("Search failed (index may not exist yet): {}", ex.getMessage());
+            return EMPTY;
+        }
+    }
+
+    private SearchResponse doSearch(
             String q, String category, String brand,
             Double minPrice, Double maxPrice, Double minRating,
             String sort, int page, int size
@@ -53,7 +70,6 @@ public class SearchService {
         addAggregations(qb);
 
         NativeQuery query = qb.build();
-        query.setSearchType(SearchType.QUERY_THEN_FETCH);
 
         SearchHits<ProductDocument> hits = operations.search(query, ProductDocument.class);
 
