@@ -18,7 +18,7 @@ services:
 
   app:
     build:
-      context: .
+      context: ./services/auth-service
       target: builder   # skip test stage for normal startup
     container_name: jwtjava-app
     ports:
@@ -47,15 +47,15 @@ services:
     ports:
       - "3000:80"
     volumes:
-      - ./ui/index.html:/usr/share/nginx/html/index.html:ro
-      - ./ui/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./legacy-ui/index.html:/usr/share/nginx/html/index.html:ro
+      - ./legacy-ui/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
       app:
         condition: service_healthy
 
   test:
     build:
-      context: .
+      context: ./services/auth-service
       target: test   # runs mvn test inside the container and exits
     container_name: jwtjava-test
     profiles:
