@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+body {
+  @apply bg-n11-gray text-gray-900 antialiased;
+}
+
+/* n11-style top nav gradient */
+.n11-gradient {
+  background: linear-gradient(135deg, #6633CC 0%, #8E5CE6 100%);
+}
+
+/* Category pill chips */
+.category-chip {
+  @apply px-3 py-1.5 rounded-full bg-white shadow-sm hover:shadow-md transition-shadow text-sm font-medium border border-gray-200;
+}
