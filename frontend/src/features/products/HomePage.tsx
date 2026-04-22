@@ -35,9 +35,9 @@ export function HomePage() {
         </p>
       </div>
 
-      {productsQ.error && (
+      {productsQ.error ? (
         <div className="bg-red-50 text-red-700 p-3 rounded">{errorMessage(productsQ.error)}</div>
-      )}
+      ) : null}
 
       {productsQ.loading ? (
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
