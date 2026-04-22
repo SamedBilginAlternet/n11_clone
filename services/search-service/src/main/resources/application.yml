@@ -1,0 +1,29 @@
+spring:
+  application:
+    name: search-service
+  elasticsearch:
+    uris: ${ELASTICSEARCH_URIS:http://localhost:9200}
+    connection-timeout: 5s
+    socket-timeout: 10s
+  # Disable DataSource/JPA auto-config (we don't use a relational DB)
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
+
+product-service:
+  base-url: ${PRODUCT_SERVICE_URI:http://localhost:8082}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info
+
+server:
+  port: 8087
+
+logging:
+  level:
+    com.example.search: INFO
+    org.springframework.data.elasticsearch.client.WIRE: WARN
