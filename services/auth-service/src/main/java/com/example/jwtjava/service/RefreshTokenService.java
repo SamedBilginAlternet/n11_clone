@@ -23,7 +23,7 @@ public class RefreshTokenService {
 
     @Transactional
     public RefreshToken createRefreshToken(User user) {
-        refreshTokenRepository.revokeAllUserTokens(user);
+        refreshTokenRepository.deleteAllByUser(user);
 
         RefreshToken refreshToken = RefreshToken.builder()
                 .token(UUID.randomUUID().toString())

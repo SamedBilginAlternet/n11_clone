@@ -55,9 +55,10 @@ public class ProductIndexer {
         long indexed = 0;
 
         while (true) {
+            final int currentPage = page;
             ProductPage pageData = client.get()
                     .uri(uri -> uri.path("/api/products")
-                            .queryParam("page", page)
+                            .queryParam("page", currentPage)
                             .queryParam("size", size)
                             .build())
                     .retrieve()
