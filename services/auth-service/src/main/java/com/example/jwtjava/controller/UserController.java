@@ -27,7 +27,7 @@ public class UserController {
                 "id", user.getId(),
                 "email", user.getEmail(),
                 "fullName", user.getFullName(),
-                "role", user.getRole()
+                "roles", user.getRoles()
         ));
     }
 

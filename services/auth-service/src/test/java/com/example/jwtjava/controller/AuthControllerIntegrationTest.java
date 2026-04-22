@@ -1,12 +1,15 @@
 package com.example.jwtjava.controller;
 
 import com.example.jwtjava.dto.AuthResponse;
+import com.example.jwtjava.saga.SagaEventPublisher;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockbean.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
@@ -24,6 +27,8 @@ class AuthControllerIntegrationTest {
 
     @Autowired MockMvc mockMvc;
     @Autowired ObjectMapper objectMapper;
+    @MockBean ConnectionFactory connectionFactory;
+    @MockBean SagaEventPublisher sagaEventPublisher;
 
     private static final String EMAIL    = "user@example.com";
     private static final String PASSWORD = "Secure1!";

@@ -27,6 +27,7 @@ jobs:
           - notification-service
           - review-service
           - search-service
+          - inventory-service
           - api-gateway
     steps:
       - uses: actions/checkout@v4

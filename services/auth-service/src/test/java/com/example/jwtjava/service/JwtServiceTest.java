@@ -7,6 +7,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.util.EnumSet;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -30,7 +32,7 @@ class JwtServiceTest {
                 .email("test@example.com")
                 .password("encoded")
                 .fullName("Test User")
-                .role(Role.USER)
+                .roles(EnumSet.of(Role.USER))
                 .build();
     }
 
@@ -63,7 +65,7 @@ class JwtServiceTest {
         User owner = testUser();
         User other = User.builder()
                 .id(2L).email("other@example.com")
-                .password("encoded").fullName("Other").role(Role.USER).build();
+                .password("encoded").fullName("Other").roles(EnumSet.of(Role.USER)).build();
 
         String token = jwtService.generateAccessToken(owner);
         assertThat(jwtService.isTokenValid(token, other)).isFalse();

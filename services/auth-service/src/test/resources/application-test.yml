@@ -10,6 +10,8 @@ spring:
     show-sql: false
   flyway:
     enabled: false   # Flyway skipped — Hibernate creates schema directly for tests
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration
 
 jwt:
   secret: test-secret-key-must-be-at-least-256-bits-long-for-hmac-sha256!!
