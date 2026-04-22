@@ -53,8 +53,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health, info, gateway
-
+        include: health, info, gateway, prometheus, metrics
 server:
   port: 8000
 

@@ -36,7 +36,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health, info
+        include: health, info, prometheus, metrics
   endpoint:
     health:
       show-details: when-authorized
@@ -51,7 +51,7 @@ info:
 
 logging:
   pattern:
-    console: "%d{HH:mm:ss} [%X{correlationId}] %-5level %logger{36} - %msg%n"
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%X{correlationId:-},%X{traceId:-}] %logger{36} - %msg%n"
   level:
     com.example.jwtjava: INFO
 

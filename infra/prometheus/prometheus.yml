@@ -1,0 +1,31 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # All Spring Boot services expose /actuator/prometheus on their internal
+  # container port. Micrometer emits HTTP server timings (http.server.requests),
+  # JVM, Tomcat/Jetty, DataSource, RabbitMQ consumer, and Flyway metrics.
+  - job_name: n11-services
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - auth-service:8080
+          - basket-service:8081
+          - product-service:8082
+          - order-service:8083
+          - payment-service:8084
+          - notification-service:8085
+          - review-service:8086
+          - search-service:8087
+          - inventory-service:8088
+          - api-gateway:8000
+        labels:
+          env: docker
+    relabel_configs:
+      # Pull the service name out of __address__ so queries can group by it
+      # with a clean label instead of "auth-service:8080".
+      - source_labels: [__address__]
+        target_label: service
+        regex: '([^:]+):\d+'
+        replacement: '$1'
