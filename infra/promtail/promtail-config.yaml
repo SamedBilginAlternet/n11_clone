@@ -35,10 +35,6 @@ scrape_configs:
       # Comment this block out if you want infra logs too.
       - source_labels: [service]
         regex: 'postgres|rabbitmq|elasticsearch|jaeger|prometheus|grafana|loki|promtail|frontend'
-        action: keep_equal
-        target_label: ignored
-      - source_labels: [service]
-        regex: 'postgres|rabbitmq|elasticsearch|jaeger|prometheus|grafana|loki|promtail|frontend'
         action: drop
 
     pipeline_stages:
