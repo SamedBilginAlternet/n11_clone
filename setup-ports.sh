@@ -16,18 +16,18 @@ find_free_port() {
 
 echo "Discovering available ports..."
 
-POSTGRES_PORT=$(find_free_port 5432)
-RABBITMQ_PORT=$(find_free_port 5672)
-RABBITMQ_MGMT_PORT=$(find_free_port 15672)
-JAEGER_UI_PORT=$(find_free_port 16686)
-JAEGER_GRPC_PORT=$(find_free_port 4317)
-JAEGER_HTTP_PORT=$(find_free_port 4318)
-LOKI_PORT=$(find_free_port 3100)
-PROMETHEUS_PORT=$(find_free_port 9090)
-GRAFANA_PORT=$(find_free_port 3001)
-ELASTICSEARCH_PORT=$(find_free_port 9200)
-GATEWAY_PORT=$(find_free_port 8000)
-FRONTEND_PORT=$(find_free_port 3000)
+POSTGRES_PORT=$(find_free_port 15432)
+RABBITMQ_PORT=$(find_free_port 15672)
+RABBITMQ_MGMT_PORT=$(find_free_port 25672)
+JAEGER_UI_PORT=$(find_free_port 26686)
+JAEGER_GRPC_PORT=$(find_free_port 14317)
+JAEGER_HTTP_PORT=$(find_free_port 14318)
+LOKI_PORT=$(find_free_port 13100)
+PROMETHEUS_PORT=$(find_free_port 19090)
+GRAFANA_PORT=$(find_free_port 13001)
+ELASTICSEARCH_PORT=$(find_free_port 19200)
+GATEWAY_PORT=$(find_free_port 18000)
+FRONTEND_PORT=$(find_free_port 13000)
 
 cat > .env <<EOF
 POSTGRES_PORT=$POSTGRES_PORT

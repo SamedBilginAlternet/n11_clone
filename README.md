@@ -82,7 +82,7 @@ CI/CD: GitHub Actions her push'ta 10 servis + frontend için paralel build + tes
 | **api-gateway** | 8000 | — | — | Public giriş noktası, tüm `/api/**` yolları uygun servise yönlendirir |
 
 Her Spring Boot servisi `/actuator/health` ve `/actuator/info` açar. auth-service Swagger UI'sı
-gateway üzerinden `http://localhost:8000/swagger-ui.html`.
+gateway üzerinden `http://localhost:18000/swagger-ui.html`.
 
 ---
 
@@ -275,17 +275,17 @@ Tüm bileşenler ayağa kalkınca (varsayılan portlar):
 
 | URL | Ne? |
 |-----|-----|
-| <http://localhost:3000> | React arayüzü |
-| <http://localhost:8000> | API gateway |
-| <http://localhost:8000/swagger-ui.html> | auth-service Swagger UI |
-| <http://localhost:15672> | RabbitMQ yönetim paneli (`guest` / `guest`) |
-| <http://localhost:16686> | **Jaeger UI** — saga trace waterfall'unu buradan izle |
-| <http://localhost:3001> | **Grafana** — hazır "n11 — Services Overview" dashboard (anonim Viewer, admin/admin ile edit) |
-| <http://localhost:9090> | Prometheus — metric sorguları ve target listesi |
-| <http://localhost:3100/ready> | Loki health endpoint (UI Grafana Explore üzerinden) |
-| <http://localhost:9200> | Elasticsearch HTTP API |
-| <http://localhost:9200/products/_search?pretty> | Ürün index'ini doğrudan sorgulama |
-| <http://localhost:5432> | PostgreSQL (`postgres` / `postgres`) |
+| <http://localhost:13000> | React arayüzü |
+| <http://localhost:18000> | API gateway |
+| <http://localhost:18000/swagger-ui.html> | auth-service Swagger UI |
+| <http://localhost:25672> | RabbitMQ yönetim paneli (`guest` / `guest`) |
+| <http://localhost:26686> | **Jaeger UI** — saga trace waterfall'unu buradan izle |
+| <http://localhost:13001> | **Grafana** — hazır "n11 — Services Overview" dashboard (anonim Viewer, admin/admin ile edit) |
+| <http://localhost:19090> | Prometheus — metric sorguları ve target listesi |
+| <http://localhost:13100/ready> | Loki health endpoint (UI Grafana Explore üzerinden) |
+| <http://localhost:19200> | Elasticsearch HTTP API |
+| <http://localhost:19200/products/_search?pretty> | Ürün index'ini doğrudan sorgulama |
+| <http://localhost:15432> | PostgreSQL (`postgres` / `postgres`) |
 
 > **Not:** `./setup-ports.sh` çalıştırdıysanız portlar farklı olabilir — `.env` dosyasına
 > veya script çıktısına bakın.
@@ -352,18 +352,18 @@ otomatik bulur, ama elle `.env` dosyasına da yazabilirsiniz (bkz. `.env.example
 
 | Değişken | Varsayılan | Servis |
 |----------|-----------|--------|
-| `POSTGRES_PORT` | `5432` | PostgreSQL |
-| `RABBITMQ_PORT` | `5672` | RabbitMQ AMQP |
-| `RABBITMQ_MGMT_PORT` | `15672` | RabbitMQ Management UI |
-| `JAEGER_UI_PORT` | `16686` | Jaeger UI |
-| `JAEGER_GRPC_PORT` | `4317` | Jaeger OTLP gRPC |
-| `JAEGER_HTTP_PORT` | `4318` | Jaeger OTLP HTTP |
-| `LOKI_PORT` | `3100` | Loki |
-| `PROMETHEUS_PORT` | `9090` | Prometheus |
-| `GRAFANA_PORT` | `3001` | Grafana |
-| `ELASTICSEARCH_PORT` | `9200` | Elasticsearch |
-| `GATEWAY_PORT` | `8000` | API Gateway |
-| `FRONTEND_PORT` | `3000` | React Frontend |
+| `POSTGRES_PORT` | `15432` | PostgreSQL |
+| `RABBITMQ_PORT` | `15672` | RabbitMQ AMQP |
+| `RABBITMQ_MGMT_PORT` | `25672` | RabbitMQ Management UI |
+| `JAEGER_UI_PORT` | `26686` | Jaeger UI |
+| `JAEGER_GRPC_PORT` | `14317` | Jaeger OTLP gRPC |
+| `JAEGER_HTTP_PORT` | `14318` | Jaeger OTLP HTTP |
+| `LOKI_PORT` | `13100` | Loki |
+| `PROMETHEUS_PORT` | `19090` | Prometheus |
+| `GRAFANA_PORT` | `13001` | Grafana |
+| `ELASTICSEARCH_PORT` | `19200` | Elasticsearch |
+| `GATEWAY_PORT` | `18000` | API Gateway |
+| `FRONTEND_PORT` | `13000` | React Frontend |
 
 Per-servis override'lar her Dockerfile/application.yml içinde dokümante edildi.
 
@@ -410,7 +410,7 @@ Her servis `micrometer-registry-prometheus` ile `/actuator/prometheus` endpoint'
 açar. Prometheus 15 saniyede bir 10 target'ı scrape eder ve `__address__` relabel
 kuralıyla `service` label'ını temizler (örn. `auth-service`).
 
-Hazır dashboard: **Grafana → Dashboards → n11 — Services Overview** (<http://localhost:3001>).
+Hazır dashboard: **Grafana → Dashboards → n11 — Services Overview** (<http://localhost:13001>).
 8 panel: toplam req/sec, 5xx/sec, P95 latency, servis başına req rate, servis başına
 P95, JVM heap, HTTP status code dağılımı, "up" servis sayısı.
 
@@ -448,7 +448,7 @@ browser → gateway → order-service (HTTP)
                                                                                               → basket, notification
 ```
 
-Jaeger UI'da <http://localhost:16686> → `service = order-service` → son trace'i aç →
+Jaeger UI'da <http://localhost:26686> → `service = order-service` → son trace'i aç →
 sağdaki timeline saga'nın bütün adımlarını sürüklenebilir bir waterfall olarak gösterir.
 Bu, saga'nın soyut tarafını somutlaştıran en hızlı yol.
 
