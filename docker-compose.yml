@@ -124,5 +124,15 @@ services:
       - "8000:8000"
     restart: on-failure
 
+  frontend:
+    build: ./frontend
+    container_name: n11-frontend
+    depends_on:
+      api-gateway:
+        condition: service_started
+    ports:
+      - "3000:80"
+    restart: on-failure
+
 volumes:
   postgres_data:

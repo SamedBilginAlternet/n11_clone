@@ -1,7 +1,9 @@
 import { ProblemDetail } from '../types';
 import { useAuthStore } from '../stores/auth';
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? '/api';
+// In Docker, nginx proxies /api to the gateway; in local dev, Vite proxies /api
+// to http://localhost:8000. Either way, relative /api works.
+const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? '/api';
 
 export class ApiError extends Error {
   status: number;
