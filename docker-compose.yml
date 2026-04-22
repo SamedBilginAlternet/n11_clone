@@ -7,7 +7,7 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: postgres
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./infra/postgres/init-db.sh:/docker-entrypoint-initdb.d/10-init-db.sh:ro
@@ -24,8 +24,8 @@ services:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "${RABBITMQ_PORT:-5672}:5672"
+      - "${RABBITMQ_MGMT_PORT:-15672}:15672"
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
       interval: 10s
@@ -38,9 +38,9 @@ services:
     environment:
       COLLECTOR_OTLP_ENABLED: "true"
     ports:
-      - "16686:16686"  # UI
-      - "4317:4317"    # OTLP gRPC
-      - "4318:4318"    # OTLP HTTP
+      - "${JAEGER_UI_PORT:-16686}:16686"    # UI
+      - "${JAEGER_GRPC_PORT:-4317}:4317"    # OTLP gRPC
+      - "${JAEGER_HTTP_PORT:-4318}:4318"    # OTLP HTTP
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:14269/ || exit 1"]
       interval: 10s
@@ -55,7 +55,7 @@ services:
       - ./infra/loki/loki-config.yaml:/etc/loki/loki-config.yaml:ro
       - loki_data:/loki
     ports:
-      - "3100:3100"
+      - "${LOKI_PORT:-3100}:3100"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3100/ready || exit 1"]
       interval: 10s
@@ -88,7 +88,7 @@ services:
       - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
     ports:
-      - "9090:9090"
+      - "${PROMETHEUS_PORT:-9090}:9090"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:9090/-/ready || exit 1"]
       interval: 10s
@@ -108,7 +108,7 @@ services:
       - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana_data:/var/lib/grafana
     ports:
-      - "3001:3000"    # 3000 is taken by the React frontend — expose Grafana on 3001
+      - "${GRAFANA_PORT:-3001}:3000"
     depends_on:
       prometheus:
         condition: service_healthy
@@ -128,7 +128,7 @@ services:
       - xpack.security.transport.ssl.enabled=false
       - ES_JAVA_OPTS=-Xms512m -Xmx512m
     ports:
-      - "9200:9200"
+      - "${ELASTICSEARCH_PORT:-9200}:9200"
     volumes:
       - elasticsearch_data:/usr/share/elasticsearch/data
     healthcheck:
@@ -407,7 +407,7 @@ services:
       inventory-service:
         condition: service_healthy
     ports:
-      - "8000:8000"
+      - "${GATEWAY_PORT:-8000}:8000"
     restart: on-failure
 
   frontend:
@@ -417,7 +417,7 @@ services:
       api-gateway:
         condition: service_started
     ports:
-      - "3000:80"
+      - "${FRONTEND_PORT:-3000}:80"
     restart: on-failure
 
 volumes:
