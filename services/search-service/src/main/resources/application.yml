@@ -22,6 +22,13 @@ management:
 server:
   port: 8087
 
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URI:http://localhost:8761/eureka}
+  instance:
+    prefer-ip-address: true
+
 logging:
   level:
     com.example.search: INFO
