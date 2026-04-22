@@ -1,5 +1,5 @@
-import { apiFetch } from './client';
-import { AuthTokens } from '../types';
+import { apiFetch } from '../../shared/api/client';
+import { AuthTokens } from '../../types';
 
 export const authApi = {
   register: (body: { email: string; password: string; fullName: string }) =>

@@ -19,3 +19,8 @@ body {
 .category-chip {
   @apply px-3 py-1.5 rounded-full bg-white shadow-sm hover:shadow-md transition-shadow text-sm font-medium border border-gray-200;
 }
+
+@keyframes slidein {
+  from { transform: translateY(8px); opacity: 0; }
+  to   { transform: translateY(0);   opacity: 1; }
+}

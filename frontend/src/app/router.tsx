@@ -1,11 +1,11 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom';
-import { Layout } from './components/Layout';
-import { HomePage } from './pages/HomePage';
-import { LoginPage } from './pages/LoginPage';
-import { RegisterPage } from './pages/RegisterPage';
-import { BasketPage } from './pages/BasketPage';
-import { ProductDetailPage } from './pages/ProductDetailPage';
-import { useAuthStore } from './stores/auth';
+import { Layout } from '../layout/Layout';
+import { HomePage } from '../features/products/HomePage';
+import { ProductDetailPage } from '../features/products/ProductDetailPage';
+import { LoginPage } from '../features/auth/LoginPage';
+import { RegisterPage } from '../features/auth/RegisterPage';
+import { BasketPage } from '../features/basket/BasketPage';
+import { useAuthStore } from '../features/auth/store';
 
 function RequireAuth({ children }: { children: JSX.Element }) {
   const authed = useAuthStore((s) => s.isAuthenticated());
@@ -32,3 +32,5 @@ export const router = createBrowserRouter([
     ],
   },
 ]);
+
+export { RequireAuth };

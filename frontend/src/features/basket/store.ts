@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Basket } from '../types';
+import { Basket } from '../../types';
 
 interface BasketState {
   basket: Basket | null;

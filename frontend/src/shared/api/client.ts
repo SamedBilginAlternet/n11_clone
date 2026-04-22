@@ -1,5 +1,5 @@
-import { ProblemDetail } from '../types';
-import { useAuthStore } from '../stores/auth';
+import { ProblemDetail } from '../../types';
+import { useAuthStore } from '../../features/auth/store';
 
 // In Docker, nginx proxies /api to the gateway; in local dev, Vite proxies /api
 // to http://localhost:8000. Either way, relative /api works.
@@ -52,7 +52,6 @@ export async function apiFetch<T>(
     throw new ApiError(res.status, problem?.detail ?? res.statusText, problem);
   }
 
-  // Might be empty body (e.g. logout) even on 200
   const text = await res.text();
   return (text ? JSON.parse(text) : undefined) as T;
 }

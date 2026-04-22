@@ -1,5 +1,5 @@
-import { apiFetch } from './client';
-import { Basket } from '../types';
+import { apiFetch } from '../../shared/api/client';
+import { Basket } from '../../types';
 
 export const basketApi = {
   get: () => apiFetch<Basket>('/basket'),

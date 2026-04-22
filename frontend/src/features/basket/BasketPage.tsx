@@ -1,57 +1,66 @@
-import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { basketApi } from '../api/basket';
-import { useBasketStore } from '../stores/basket';
-
-const formatTRY = (n: number) =>
-  new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 2 }).format(n);
+import { basketApi } from './api';
+import { useBasketStore } from './store';
+import { useApi } from '../../shared/hooks/useApi';
+import { formatTRY } from '../../shared/utils/format';
+import { Button } from '../../shared/ui/Button';
+import { Card } from '../../shared/ui/Card';
+import { useToast } from '../../shared/providers/ToastProvider';
+import { errorMessage } from '../../shared/api/problem';
 
 export function BasketPage() {
-  const { basket, loading, setBasket, setLoading } = useBasketStore();
+  const setBasket = useBasketStore((s) => s.setBasket);
+  const toast = useToast();
 
-  const reload = async () => {
-    setLoading(true);
+  const { data: basket, loading, refetch } = useApi(() => basketApi.get(), []);
+
+  const handleQty = async (itemId: number, qty: number) => {
+    if (qty < 1) return;
     try {
-      const b = await basketApi.get();
+      const b = await basketApi.updateItem(itemId, qty);
       setBasket(b);
-    } finally {
-      setLoading(false);
+      await refetch();
+    } catch (err) {
+      toast.error(errorMessage(err, 'Güncelleme başarısız.'));
     }
   };
 
-  useEffect(() => {
-    void reload();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const handleQty = async (itemId: number, quantity: number) => {
-    if (quantity < 1) return;
-    const b = await basketApi.updateItem(itemId, quantity);
-    setBasket(b);
-  };
-
   const handleRemove = async (itemId: number) => {
-    const b = await basketApi.removeItem(itemId);
-    setBasket(b);
+    try {
+      const b = await basketApi.removeItem(itemId);
+      setBasket(b);
+      await refetch();
+    } catch (err) {
+      toast.error(errorMessage(err, 'Silme başarısız.'));
+    }
   };
 
   const handleClear = async () => {
-    await basketApi.clear();
-    setBasket({ ...(basket ?? { id: 0, userEmail: '', items: [], total: 0, itemCount: 0 }), items: [], total: 0, itemCount: 0 });
+    try {
+      await basketApi.clear();
+      toast.info('Sepet temizlendi.');
+      await refetch();
+      setBasket(null);
+    } catch (err) {
+      toast.error(errorMessage(err));
+    }
   };
 
   if (loading && !basket) return <div className="text-gray-500">Sepet yükleniyor...</div>;
 
   if (!basket || basket.items.length === 0) {
     return (
-      <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+      <Card className="p-12 text-center">
         <div className="text-6xl mb-3">🛒</div>
-        <h1 className="text-xl font-bold mb-1">Sepetiniz boş</h1>
-        <p className="text-gray-500 mb-4">Alışverişe başlamak için ana sayfaya dönün.</p>
-        <Link to="/" className="inline-block bg-n11-purple text-white px-4 py-2 rounded font-medium hover:bg-purple-700">
+        <h1 className="text-xl font-bold mb-1">Sepetin boş</h1>
+        <p className="text-gray-500 mb-4">Alışverişe başlamak için ana sayfaya dön.</p>
+        <Link
+          to="/"
+          className="inline-block bg-n11-purple text-white px-4 py-2 rounded font-medium hover:bg-purple-700"
+        >
           Alışverişe Devam Et
         </Link>
-      </div>
+      </Card>
     );
   }
 
@@ -66,7 +75,7 @@ export function BasketPage() {
         </div>
 
         {basket.items.map((item) => (
-          <div key={item.id} className="bg-white rounded-lg border border-gray-200 p-3 flex gap-3">
+          <Card key={item.id} className="p-3 flex gap-3">
             {item.imageUrl && (
               <img src={item.imageUrl} alt={item.productName} className="w-20 h-20 object-cover rounded" />
             )}
@@ -97,11 +106,11 @@ export function BasketPage() {
               </div>
             </div>
             <div className="text-right font-bold">{formatTRY(item.subtotal)}</div>
-          </div>
+          </Card>
         ))}
       </div>
 
-      <aside className="bg-white rounded-lg border border-gray-200 p-4 h-fit sticky top-20">
+      <Card className="p-4 h-fit sticky top-20">
         <h2 className="font-bold mb-3">Sipariş Özeti</h2>
         <div className="flex justify-between text-sm text-gray-600 mb-2">
           <span>Ara Toplam</span>
@@ -115,13 +124,12 @@ export function BasketPage() {
           <span>Toplam</span>
           <span className="text-n11-purple text-lg">{formatTRY(basket.total)}</span>
         </div>
-        <button className="w-full mt-4 bg-n11-orange text-white py-2.5 rounded font-semibold hover:bg-orange-600">
-          Ödemeye Geç
-        </button>
-        <p className="text-xs text-gray-400 mt-2">
-          Ödeme akışı demo kapsamında değil — sepet saga mimarisini göstermek için yeterli.
-        </p>
-      </aside>
+        <Link to="/checkout">
+          <Button variant="secondary" size="lg" fullWidth className="mt-4">
+            Ödemeye Geç
+          </Button>
+        </Link>
+      </Card>
     </div>
   );
 }

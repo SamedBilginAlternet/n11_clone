@@ -1,5 +1,5 @@
 import { Link, useSearchParams } from 'react-router-dom';
-import { Category } from '../types';
+import { Category } from '../../types';
 
 export function CategoryBar({ categories }: { categories: Category[] }) {
   const [params] = useSearchParams();

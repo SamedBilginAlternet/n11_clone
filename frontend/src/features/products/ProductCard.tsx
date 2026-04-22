@@ -1,8 +1,7 @@
 import { Link } from 'react-router-dom';
-import { Product } from '../types';
-
-const formatTRY = (n: number) =>
-  new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 2 }).format(n);
+import { Product } from '../../types';
+import { formatTRY } from '../../shared/utils/format';
+import { RatingStars } from '../../shared/ui/RatingStars';
 
 export function ProductCard({ product }: { product: Product }) {
   const hasDiscount = product.discountPercentage > 0;
@@ -26,12 +25,13 @@ export function ProductCard({ product }: { product: Product }) {
       </div>
       <div className="p-3 flex flex-col flex-1 gap-1">
         {product.brand && (
-          <div className="text-[11px] uppercase tracking-wide text-gray-400 font-medium">{product.brand}</div>
+          <div className="text-[11px] uppercase tracking-wide text-gray-400 font-medium">
+            {product.brand}
+          </div>
         )}
         <div className="text-sm text-gray-900 line-clamp-2 min-h-[2.5rem]">{product.name}</div>
         <div className="flex items-center gap-1 text-xs text-gray-500 mt-1">
-          <span className="text-n11-orange">★</span>
-          <span>{product.rating.toFixed(1)}</span>
+          <RatingStars value={product.rating} size={12} />
           <span>({product.reviewCount})</span>
         </div>
         <div className="mt-auto pt-2">

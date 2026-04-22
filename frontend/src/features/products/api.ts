@@ -1,5 +1,5 @@
-import { apiFetch } from './client';
-import { Category, PageResult, Product } from '../types';
+import { apiFetch } from '../../shared/api/client';
+import { Category, PageResult, Product } from '../../types';
 
 export const productApi = {
   list: (params: { category?: string; q?: string; page?: number; size?: number } = {}) => {

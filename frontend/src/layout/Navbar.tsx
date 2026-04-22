@@ -1,13 +1,15 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuthStore } from '../stores/auth';
-import { useBasketStore } from '../stores/basket';
-import { authApi } from '../api/auth';
 import { useState } from 'react';
+import { useAuthStore } from '../features/auth/store';
+import { useBasketStore } from '../features/basket/store';
+import { authApi } from '../features/auth/api';
+import { useToast } from '../shared/providers/ToastProvider';
 
 export function Navbar() {
   const { email, refreshToken, clear, isAuthenticated } = useAuthStore();
   const { basket, setBasket } = useBasketStore();
   const navigate = useNavigate();
+  const toast = useToast();
   const [query, setQuery] = useState('');
 
   const handleLogout = async () => {
@@ -18,6 +20,7 @@ export function Navbar() {
     }
     clear();
     setBasket(null);
+    toast.info('Çıkış yapıldı.');
     navigate('/');
   };
 
@@ -44,10 +47,13 @@ export function Navbar() {
           />
         </form>
 
-        <nav className="flex items-center gap-4 text-sm">
+        <nav className="flex items-center gap-2 text-sm">
           {isAuthenticated() ? (
             <>
-              <span className="hidden md:inline opacity-90">{email}</span>
+              <span className="hidden md:inline opacity-90 px-2">{email}</span>
+              <Link to="/orders" className="hidden md:inline px-3 py-1.5 rounded-md hover:bg-white/10">
+                Siparişler
+              </Link>
               <Link
                 to="/basket"
                 className="relative flex items-center gap-1 px-3 py-1.5 rounded-md hover:bg-white/10"
@@ -59,10 +65,7 @@ export function Navbar() {
                   </span>
                 )}
               </Link>
-              <button
-                onClick={handleLogout}
-                className="px-3 py-1.5 rounded-md hover:bg-white/10"
-              >
+              <button onClick={handleLogout} className="px-3 py-1.5 rounded-md hover:bg-white/10">
                 Çıkış
               </button>
             </>

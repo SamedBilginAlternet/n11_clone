@@ -12,7 +12,7 @@ export function Layout() {
         <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row justify-between gap-3">
           <div>© 2026 n11 Clone — Eğitim amaçlı demo.</div>
           <div className="text-xs opacity-70">
-            Mikroservis mimarisi · Saga pattern · JWT · Spring Boot · React
+            7 mikroservis · Saga pattern · RabbitMQ · JWT · Spring Boot · React
           </div>
         </div>
       </footer>

@@ -1,36 +1,36 @@
 import { FormEvent, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { authApi } from '../api/auth';
-import { ApiError } from '../api/client';
-import { useAuthStore } from '../stores/auth';
+import { authApi } from './api';
+import { useAuthStore } from './store';
+import { Button } from '../../shared/ui/Button';
+import { Card } from '../../shared/ui/Card';
+import { Input } from '../../shared/ui/Input';
+import { errorFields, errorMessage } from '../../shared/api/problem';
+import { useToast } from '../../shared/providers/ToastProvider';
 
 export function RegisterPage() {
   const navigate = useNavigate();
   const setTokens = useAuthStore((s) => s.setTokens);
+  const toast = useToast();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [fields, setFields] = useState<Record<string, string>>({});
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError(null);
     setFields({});
     try {
       const tokens = await authApi.register({ email, password, fullName });
       setTokens(tokens, email);
+      toast.success('Hesabın oluşturuldu — sepet otomatik kuruluyor (saga).');
       navigate('/');
     } catch (err) {
-      if (err instanceof ApiError) {
-        setError(err.problem?.detail ?? 'Kayıt başarısız.');
-        if (err.problem?.fields) setFields(err.problem.fields);
-      } else {
-        setError('Beklenmeyen bir hata oluştu.');
-      }
+      setFields(errorFields(err) ?? {});
+      toast.error(errorMessage(err, 'Kayıt başarısız.'));
     } finally {
       setLoading(false);
     }
@@ -38,67 +38,55 @@ export function RegisterPage() {
 
   return (
     <div className="max-w-md mx-auto">
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mt-6">
+      <Card className="p-6 mt-6">
         <h1 className="text-xl font-bold mb-1">Üye Ol</h1>
         <p className="text-sm text-gray-500 mb-4">
-          Hesabınız varsa <Link className="text-n11-purple font-medium" to="/login">giriş yapın</Link>.
+          Hesabın varsa{' '}
+          <Link className="text-n11-purple font-medium" to="/login">
+            giriş yap
+          </Link>
+          .
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <label className="block">
-            <span className="text-sm font-medium text-gray-700">Ad Soyad</span>
-            <input
-              type="text"
-              required
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              className="mt-1 w-full rounded border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-n11-purple"
-            />
-            {fields.fullName && <p className="text-red-600 text-xs mt-1">{fields.fullName}</p>}
-          </label>
-          <label className="block">
-            <span className="text-sm font-medium text-gray-700">E-posta</span>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 w-full rounded border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-n11-purple"
-            />
-            {fields.email && <p className="text-red-600 text-xs mt-1">{fields.email}</p>}
-          </label>
-          <label className="block">
-            <span className="text-sm font-medium text-gray-700">Şifre</span>
-            <input
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 w-full rounded border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-n11-purple"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              En az 8 karakter · bir büyük harf · bir rakam · bir özel karakter.
-            </p>
-            {fields.password && <p className="text-red-600 text-xs mt-1">{fields.password}</p>}
-          </label>
+          <Input
+            name="fullName"
+            label="Ad Soyad"
+            required
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            error={fields.fullName}
+          />
+          <Input
+            name="email"
+            type="email"
+            label="E-posta"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            error={fields.email}
+          />
+          <Input
+            name="password"
+            type="password"
+            label="Şifre"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            hint="En az 8 karakter · bir büyük harf · bir rakam · bir özel karakter."
+            error={fields.password}
+          />
 
-          {error && <div className="bg-red-50 text-red-700 p-3 rounded text-sm">{error}</div>}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-n11-orange text-white py-2 rounded font-medium hover:bg-orange-600 disabled:opacity-60"
-          >
-            {loading ? 'Hesap oluşturuluyor...' : 'Üye Ol'}
-          </button>
+          <Button type="submit" variant="secondary" fullWidth loading={loading}>
+            Üye Ol
+          </Button>
 
           <p className="text-xs text-gray-400">
-            Kayıt başarılı olduğunda auth-service arka planda bir
-            <code className="bg-gray-100 px-1 mx-1 rounded">UserRegistered</code>
-            eventi yayınlar; basket-service bunu tüketip size boş bir sepet oluşturur (saga).
+            Kayıt olduğunda <code className="bg-gray-100 px-1 rounded">UserRegistered</code> olayı
+            yayınlanır; basket-service tüketip sana boş sepet oluşturur (saga koreografisi).
           </p>
         </form>
-      </div>
+      </Card>
     </div>
   );
 }
