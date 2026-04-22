@@ -1,0 +1,43 @@
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      # Global CORS — one place only.
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOriginPatterns: "*"
+            allowedMethods: "*"
+            allowedHeaders: "*"
+            allowCredentials: true
+      routes:
+        - id: auth-service
+          uri: ${AUTH_SERVICE_URI:http://localhost:8080}
+          predicates:
+            - Path=/api/auth/**,/api/users/**
+        - id: basket-service
+          uri: ${BASKET_SERVICE_URI:http://localhost:8081}
+          predicates:
+            - Path=/api/basket/**
+        - id: product-service
+          uri: ${PRODUCT_SERVICE_URI:http://localhost:8082}
+          predicates:
+            - Path=/api/products/**
+        - id: auth-swagger
+          uri: ${AUTH_SERVICE_URI:http://localhost:8080}
+          predicates:
+            - Path=/swagger-ui/**,/v3/api-docs/**
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, gateway
+
+server:
+  port: 8000
+
+logging:
+  level:
+    org.springframework.cloud.gateway: INFO
