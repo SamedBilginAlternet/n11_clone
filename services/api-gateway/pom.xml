@@ -44,6 +44,9 @@
         <!-- Prometheus metrics -->
 
         <dependency><groupId>io.micrometer</groupId><artifactId>micrometer-registry-prometheus</artifactId><scope>runtime</scope></dependency>
+
+        <!-- Eureka client -->
+        <dependency><groupId>org.springframework.cloud</groupId><artifactId>spring-cloud-starter-netflix-eureka-client</artifactId></dependency>
     </dependencies>
 
     <dependencyManagement>
