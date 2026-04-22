@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JWT API Test UI</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    h1 { font-size: 1.4rem; font-weight: 600; color: #f8fafc; margin-bottom: 24px; }
+    h2 { font-size: 0.8rem; font-weight: 600; color: #94a3b8; text-transform: uppercase;
+         letter-spacing: .08em; margin-bottom: 12px; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 16px;
+    }
+
+    .card {
+      background: #1e2130;
+      border: 1px solid #2d3348;
+      border-radius: 10px;
+      padding: 20px;
+    }
+
+    label { display: block; font-size: 0.78rem; color: #94a3b8; margin-bottom: 4px; margin-top: 10px; }
+    label:first-of-type { margin-top: 0; }
+
+    input {
+      width: 100%;
+      background: #0f1117;
+      border: 1px solid #2d3348;
+      border-radius: 6px;
+      color: #e2e8f0;
+      padding: 8px 10px;
+      font-size: 0.875rem;
+      outline: none;
+      transition: border-color .15s;
+    }
+    input:focus { border-color: #6366f1; }
+
+    button {
+      margin-top: 14px;
+      width: 100%;
+      padding: 9px;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity .15s;
+    }
+    button:hover { opacity: .85; }
+    button:disabled { opacity: .4; cursor: not-allowed; }
+
+    .btn-primary  { background: #6366f1; color: #fff; }
+    .btn-success  { background: #22c55e; color: #fff; }
+    .btn-warning  { background: #f59e0b; color: #000; }
+    .btn-danger   { background: #ef4444; color: #fff; }
+    .btn-neutral  { background: #334155; color: #e2e8f0; }
+
+    .token-box {
+      background: #0f1117;
+      border: 1px solid #2d3348;
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-size: 0.72rem;
+      font-family: 'Courier New', monospace;
+      word-break: break-all;
+      color: #a5f3fc;
+      min-height: 36px;
+      margin-top: 4px;
+    }
+
+    .response-panel {
+      background: #0f1117;
+      border: 1px solid #2d3348;
+      border-radius: 8px;
+      padding: 16px;
+      margin-top: 16px;
+    }
+
+    .response-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.72rem;
+      font-weight: 700;
+    }
+    .badge-2xx { background: #166534; color: #86efac; }
+    .badge-4xx { background: #7f1d1d; color: #fca5a5; }
+    .badge-5xx { background: #78350f; color: #fde68a; }
+
+    pre {
+      font-family: 'Courier New', monospace;
+      font-size: 0.78rem;
+      white-space: pre-wrap;
+      word-break: break-all;
+      color: #cbd5e1;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    .divider {
+      height: 1px;
+      background: #2d3348;
+      margin: 16px 0;
+    }
+
+    .row { display: flex; gap: 8px; }
+    .row button { flex: 1; }
+
+    .status-dot {
+      display: inline-block;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      margin-right: 6px;
+    }
+    .dot-green  { background: #22c55e; }
+    .dot-red    { background: #ef4444; }
+    .dot-yellow { background: #f59e0b; }
+  </style>
+</head>
+<body>
+
+<h1>🔐 JWT Refresh Token API — Test UI</h1>
+
+<div class="grid">
+
+  <!-- ── Register ──────────────────────────────────── -->
+  <div class="card">
+    <h2>Kayıt Ol</h2>
+    <label>Ad Soyad</label>
+    <input id="reg-name" type="text" placeholder="Ali Veli" />
+    <label>E-posta</label>
+    <input id="reg-email" type="email" placeholder="ali@example.com" />
+    <label>Şifre</label>
+    <input id="reg-password" type="password" placeholder="Secure1!" />
+    <button class="btn-primary" onclick="register()">Kayıt Ol</button>
+  </div>
+
+  <!-- ── Login ─────────────────────────────────────── -->
+  <div class="card">
+    <h2>Giriş Yap</h2>
+    <label>E-posta</label>
+    <input id="login-email" type="email" placeholder="ali@example.com" />
+    <label>Şifre</label>
+    <input id="login-password" type="password" placeholder="Secure1!" />
+    <button class="btn-success" onclick="login()">Giriş Yap</button>
+  </div>
+
+  <!-- ── Token Durumu ───────────────────────────────── -->
+  <div class="card">
+    <h2>Token Durumu</h2>
+    <label>Access Token</label>
+    <div class="token-box" id="access-token-display">—</div>
+    <label>Refresh Token</label>
+    <div class="token-box" id="refresh-token-display">—</div>
+    <div class="divider"></div>
+    <div class="row">
+      <button class="btn-warning" onclick="refresh()">Yenile</button>
+      <button class="btn-danger"  onclick="logout()">Çıkış</button>
+    </div>
+    <button class="btn-neutral" style="margin-top:8px" onclick="clearTokens()">Temizle</button>
+  </div>
+
+  <!-- ── Korumalı Endpoint'ler ─────────────────────── -->
+  <div class="card">
+    <h2>Korumalı Endpoint'ler</h2>
+    <button class="btn-neutral" onclick="getMe()">GET /api/users/me</button>
+    <button class="btn-neutral" onclick="getAdmin()">GET /api/users/admin</button>
+    <div class="divider"></div>
+    <h2>Herkese Açık</h2>
+    <button class="btn-neutral" onclick="getHealth()">GET /actuator/health</button>
+  </div>
+
+</div>
+
+<!-- ── Response Panel ────────────────────────────────── -->
+<div class="response-panel" id="response-panel" style="display:none">
+  <div class="response-header">
+    <h2 style="margin:0">Yanıt</h2>
+    <span class="badge" id="status-badge"></span>
+  </div>
+  <pre id="response-body"></pre>
+</div>
+
+<script>
+  let accessToken  = localStorage.getItem('accessToken')  || '';
+  let refreshToken = localStorage.getItem('refreshToken') || '';
+
+  refreshDisplays();
+
+  function refreshDisplays() {
+    document.getElementById('access-token-display').textContent  = accessToken  || '—';
+    document.getElementById('refresh-token-display').textContent = refreshToken || '—';
+  }
+
+  function saveTokens(at, rt) {
+    accessToken  = at;
+    refreshToken = rt;
+    localStorage.setItem('accessToken',  at);
+    localStorage.setItem('refreshToken', rt);
+    refreshDisplays();
+  }
+
+  function clearTokens() {
+    saveTokens('', '');
+    showResponse(null, '— token temizlendi —');
+  }
+
+  async function request(method, path, body, auth = false) {
+    const headers = { 'Content-Type': 'application/json' };
+    if (auth && accessToken) headers['Authorization'] = 'Bearer ' + accessToken;
+
+    const res = await fetch(path, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+
+    let data;
+    const ct = res.headers.get('content-type') || '';
+    if (res.status === 204) {
+      data = null;
+    } else if (ct.includes('json')) {
+      data = await res.json();
+    } else {
+      data = await res.text();
+    }
+
+    showResponse(res.status, data);
+    return { status: res.status, data };
+  }
+
+  function showResponse(status, data) {
+    const panel  = document.getElementById('response-panel');
+    const badge  = document.getElementById('status-badge');
+    const body   = document.getElementById('response-body');
+
+    panel.style.display = 'block';
+
+    if (status === null) {
+      badge.textContent = '';
+      badge.className = 'badge';
+      body.textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+      return;
+    }
+
+    badge.textContent = status;
+    badge.className = 'badge ' + (status < 300 ? 'badge-2xx' : status < 500 ? 'badge-4xx' : 'badge-5xx');
+    body.textContent = data === null ? '(boş yanıt)' : JSON.stringify(data, null, 2);
+  }
+
+  async function register() {
+    const name     = document.getElementById('reg-name').value;
+    const email    = document.getElementById('reg-email').value;
+    const password = document.getElementById('reg-password').value;
+
+    const { status, data } = await request('POST', '/api/auth/register',
+      { fullName: name, email, password });
+
+    if (status === 201) saveTokens(data.accessToken, data.refreshToken);
+  }
+
+  async function login() {
+    const email    = document.getElementById('login-email').value;
+    const password = document.getElementById('login-password').value;
+
+    const { status, data } = await request('POST', '/api/auth/login', { email, password });
+    if (status === 200) saveTokens(data.accessToken, data.refreshToken);
+  }
+
+  async function refresh() {
+    if (!refreshToken) { showResponse(null, '⚠ Refresh token yok.'); return; }
+    const { status, data } = await request('POST', '/api/auth/refresh', { refreshToken });
+    if (status === 200) saveTokens(data.accessToken, data.refreshToken);
+  }
+
+  async function logout() {
+    if (!refreshToken) { showResponse(null, '⚠ Refresh token yok.'); return; }
+    await request('POST', '/api/auth/logout', { refreshToken });
+    saveTokens('', '');
+  }
+
+  async function getMe()     { await request('GET', '/api/users/me',    null, true); }
+  async function getAdmin()  { await request('GET', '/api/users/admin', null, true); }
+  async function getHealth() { await request('GET', '/actuator/health'); }
+</script>
+
+</body>
+</html>
