@@ -1,9 +1,9 @@
-# n11 Clone — Mikroservis + Saga Pattern + Elasticsearch + Tracing + React
+# n11 Clone — Mikroservis + Saga + Elasticsearch + Observability + React
 
 Spring Boot 3.3 / Java 21 tabanlı **9 mikroservis**, RabbitMQ üzerinde
 **choreography-based Saga pattern**, Elasticsearch ile **faceted full-text search**,
-OpenTelemetry + Jaeger ile **distributed tracing**, Spring Cloud Gateway, ve React +
-Vite + Tailwind ile yazılmış n11 tarzı Türkçe e-ticaret arayüzü.
+**üç-sütunlu observability stack** (Prometheus + Grafana + Jaeger + Loki), Spring Cloud
+Gateway, ve React + Vite + Tailwind ile yazılmış n11 tarzı Türkçe e-ticaret arayüzü.
 
 İki saga koreografisi iki farklı gerçek dağıtık işlem sorununu çözer:
 
@@ -12,6 +12,15 @@ Vite + Tailwind ile yazılmış n11 tarzı Türkçe e-ticaret arayüzü.
 - **CheckoutSaga** — sipariş → **stok rezervasyonu** → ödeme → sepet temizleme + bildirim;
   stok yetersizse veya ödeme reddedilirse siparişi CANCELLED'a alma, rezerve edilen stoğu
   geri bırakma ve kullanıcıyı bilgilendirme.
+
+**Gözlemlenebilirlik:**
+- **Metrics** — Micrometer → Prometheus → Grafana (hazır dashboard: req/sec, P95,
+  hata oranı, JVM heap per servis)
+- **Traces** — OpenTelemetry → Jaeger (`POST /checkout` → 8 servis + RabbitMQ üzerinden
+  tek bir trace waterfall)
+- **Logs** — Her servis her HTTP isteği için yapılandırılmış log basar; Promtail Docker
+  loglarını Loki'ye gönderir, Grafana'da aranabilir. Her log satırında
+  `[correlationId, traceId]` — log ↔ trace iki yönlü click-through var.
 
 CI/CD: GitHub Actions her push'ta 9 servis + frontend için paralel build + test koşar.
 
@@ -263,6 +272,9 @@ Tüm bileşenler ayağa kalkınca:
 | <http://localhost:8000/swagger-ui.html> | auth-service Swagger UI |
 | <http://localhost:15672> | RabbitMQ yönetim paneli (`guest` / `guest`) |
 | <http://localhost:16686> | **Jaeger UI** — saga trace waterfall'unu buradan izle |
+| <http://localhost:3001> | **Grafana** — hazır "n11 — Services Overview" dashboard (anonim Viewer, admin/admin ile edit) |
+| <http://localhost:9090> | Prometheus — metric sorguları ve target listesi |
+| <http://localhost:3100/ready> | Loki health endpoint (UI Grafana Explore üzerinden) |
 | <http://localhost:9200> | Elasticsearch HTTP API |
 | <http://localhost:9200/products/_search?pretty> | Ürün index'ini doğrudan sorgulama |
 | <http://localhost:5432> | PostgreSQL (`postgres` / `postgres`) |
@@ -356,10 +368,38 @@ Per-servis override'lar her Dockerfile/application.yml içinde dokümante edildi
 
 ---
 
-## Distributed Tracing (OpenTelemetry + Jaeger)
+## Observability — Metrics + Traces + Logs
+
+Üç sütunu tek Grafana arayüzünden takip edersin. Hepsi tek bir `docker compose up`
+ile gelir — ek bir kurulum yok.
+
+### Metrics (Prometheus → Grafana)
+
+Her servis `micrometer-registry-prometheus` ile `/actuator/prometheus` endpoint'i
+açar. Prometheus 15 saniyede bir 10 target'ı scrape eder ve `__address__` relabel
+kuralıyla `service` label'ını temizler (örn. `auth-service`).
+
+Hazır dashboard: **Grafana → Dashboards → n11 — Services Overview** (<http://localhost:3001>).
+8 panel: toplam req/sec, 5xx/sec, P95 latency, servis başına req rate, servis başına
+P95, JVM heap, HTTP status code dağılımı, "up" servis sayısı.
+
+Örnek PromQL sorguları:
+
+```promql
+# Her servisin son 1 dakikalık istek hızı
+sum(rate(http_server_requests_seconds_count{job="n11-services"}[1m])) by (service)
+
+# order-service 5xx oranı
+sum(rate(http_server_requests_seconds_count{service="order-service",status=~"5.."}[1m]))
+
+# Saga kuyruğunda bekleyen mesaj sayısı (RabbitMQ metrikleri basket-service üzerinden)
+rabbitmq_queue_messages
+```
+
+### Traces (OpenTelemetry → Jaeger)
 
 Her servis `micrometer-tracing-bridge-otel` + `opentelemetry-exporter-otlp` ile gelir ve
-OTLP HTTP üzerinden Jaeger'a (`http://jaeger:4318/v1/traces`) `%100` örnekleme ile span
+OTLP HTTP üzerinden Jaeger'a (`http://jaeger:4318/v1/traces`) %100 örnekleme ile span
 gönderir. Spring Web / WebClient / RestClient / RabbitTemplate / Spring Data zaten
 Micrometer-observed olduğu için tek bir `POST /api/orders/checkout` şu sırayı tek bir
 **trace waterfall** olarak üretir:
@@ -389,6 +429,44 @@ Tracing env vars (compose otomatik set ediyor):
 | `MANAGEMENT_TRACING_SAMPLING_PROBABILITY` | `1.0` |
 
 Production'da sampling'i düşürün (`0.1` gibi) — %100 sadece demo için.
+
+### Logs (Promtail → Loki → Grafana)
+
+Her servis her HTTP isteğini iki satır log olarak basar:
+
+```
+2026-04-22 14:23:45.678 INFO  [b4a9…,1a2b3c…] com.example.order.OrderController - → POST /api/orders/checkout
+2026-04-22 14:23:46.112 INFO  [b4a9…,1a2b3c…] com.example.order.OrderController - ← POST /api/orders/checkout status=202 | 434 ms
+```
+
+`[correlationId, traceId]` köşeli parantez içinde:
+- **correlationId** — `RequestLoggingFilter` tarafından `X-Correlation-Id` header'ından
+  ya da UUID'den atanır. Gateway'de mint edilip downstream servislere otomatik
+  propagate olur, response header'ına da geri eklenir.
+- **traceId** — Micrometer tracing bridge tarafından MDC'ye konur; Jaeger span ID'si
+  ile aynıdır.
+
+Promtail bu pattern'ı parse edip `level`, `correlationId`, `traceId`'i Loki label'ı
+olarak indeksler. Grafana Explore'da:
+
+```logql
+# Tek bir servis, sadece hatalar
+{service="order-service", level="ERROR"}
+
+# Belirli bir isteğin tüm servislerdeki log'ları
+{correlationId="b4a9..."}
+
+# Belirli bir trace'in tüm log'ları — Jaeger span'ından tek tıkla geç
+{traceId="1a2b3c..."}
+```
+
+Loki datasource'undaki `derivedFields` kuralı log satırındaki `traceId=`'yi Jaeger
+span'ına link'e çevirir. Jaeger datasource'unun `tracesToLogsV2` config'i de tersini
+yapar — span'dan log'lara geçer. Üç sütun arasında **çift yönlü click-through**
+korelasyonu var.
+
+Promtail Docker socket'i scrape ettiği için servislerin log driver'ını değiştirmek
+gerekmiyor; `docker logs <container>` de olduğu gibi çalışır.
 
 ---
 
