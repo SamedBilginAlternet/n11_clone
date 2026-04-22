@@ -1,8 +1,9 @@
-# n11 Clone — Mikroservis + Saga Pattern + React
+# n11 Clone — Mikroservis + Saga Pattern + Elasticsearch + React
 
-Spring Boot 3.3 / Java 21 tabanlı 7 mikroservis, RabbitMQ üzerinde **choreography-based
-Saga pattern**, Spring Cloud Gateway, ve React + Vite + Tailwind ile yazılmış n11 tarzı
-Türkçe e-ticaret arayüzü.
+Spring Boot 3.3 / Java 21 tabanlı **8 mikroservis**, RabbitMQ üzerinde
+**choreography-based Saga pattern**, Elasticsearch ile **faceted full-text search**,
+Spring Cloud Gateway, ve React + Vite + Tailwind ile yazılmış n11 tarzı Türkçe
+e-ticaret arayüzü.
 
 İki saga koreografisi iki farklı gerçek dağıtık işlem sorununu çözer:
 
@@ -26,32 +27,24 @@ Türkçe e-ticaret arayüzü.
                          │   Spring Cloud GW    │
                          └──┬──────────────────┬┘
                             │                  │
-        ┌───────────────────┼────────┬─────────┼──────────────┬──────────────┐
-        ▼                   ▼        ▼         ▼              ▼              ▼
-  ┌─────────────┐   ┌──────────────┐ ┌──────────────┐  ┌──────────────┐ ┌──────────────┐
-  │ auth        │   │ basket       │ │ product      │  │ order        │ │ review       │
-  │ :8080       │   │ :8081        │ │ :8082        │  │ :8083        │ │ :8086        │
-  │ authdb      │   │ basketdb     │ │ productdb    │  │ orderdb      │ │ reviewdb     │
-  └──────┬──────┘   └──────┬───────┘ └──────────────┘  └──────┬───────┘ └──────────────┘
-         │                 │                                   │
-         │                 │        ┌──────────────┐           │
-         │                 │        │ payment      │           │
-         │                 │        │ :8084        │           │
-         │                 │        │ paymentdb    │           │
-         │                 │        └──────┬───────┘           │
-         │                 │               │                    │
-         │                 │        ┌──────▼───────┐            │
-         │                 │        │ notification │            │
-         │                 │        │ :8085        │            │
-         │                 │        │ notif.db     │            │
-         │                 │        └──────┬───────┘            │
-         │                 │               │                    │
-         └─────────────────┴────────┬──────┴────────────────────┘
-                                    ▼
-                         ┌────────────────────┐
-                         │    RabbitMQ        │  :5672 / :15672 (mgmt UI)
-                         │    saga.exchange   │
-                         └────────────────────┘
+       ┌──────────┬─────────┼──────────┬───────┼──────────┬──────────┬──────────┐
+       ▼          ▼         ▼          ▼       ▼          ▼          ▼          ▼
+  ┌─────────┐ ┌────────┐ ┌────────┐ ┌───────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌─────────┐
+  │ auth    │ │ basket │ │ product│ │ order │ │ payment│ │ notif. │ │ review │ │ search  │
+  │ :8080   │ │ :8081  │ │ :8082  │ │ :8083 │ │ :8084  │ │ :8085  │ │ :8086  │ │ :8087   │
+  │ authdb  │ │basketdb│ │product │ │orderdb│ │payment │ │ notif. │ │reviewdb│ │ (ES idx)│
+  └────┬────┘ └────┬───┘ └────┬───┘ └───┬───┘ └────┬───┘ └────┬───┘ └────────┘ └────┬────┘
+       │          │          │          │          │          │                     │
+       │          │          │          │          │          │                 pulls from
+       │          │          └──────────┼──────────┼──────────┼─────────────────────┘
+       │          │                     │          │          │
+       └──────────┴─────────────────────┴──────────┴──────────┘
+                                    │
+                         ┌──────────▼─────────┐          ┌──────────────────┐
+                         │    RabbitMQ        │          │  Elasticsearch   │
+                         │    saga.exchange   │          │   :9200          │
+                         │    :5672 / :15672  │          │   (products idx) │
+                         └────────────────────┘          └──────────────────┘
                                     │
                          ┌──────────▼─────────┐
                          │   PostgreSQL 16    │  :5432
@@ -63,8 +56,8 @@ Türkçe e-ticaret arayüzü.
 
 ## Servisler
 
-| Servis | Port | DB | Saga Rolü | Temel endpoint'ler |
-|--------|------|----|-----------|--------------------|
+| Servis | Port | Depo | Saga Rolü | Temel endpoint'ler |
+|--------|------|------|-----------|--------------------|
 | **auth-service** | 8080 | `authdb` | UserRegistered **publisher** + BasketCreationFailed **compensator** | `POST /api/auth/register\|login\|refresh\|logout`, `GET /api/users/me` |
 | **basket-service** | 8081 | `basketdb` | UserRegistered **consumer** (empty cart), OrderConfirmed **consumer** (clear cart) | `GET /api/basket`, `POST /api/basket/items`, `PUT/DELETE /api/basket/items/{id}` |
 | **product-service** | 8082 | `productdb` | — | `GET /api/products?category=&q=`, `GET /api/products/{id}`, `GET /api/products/slug/{slug}`, `GET /api/products/categories` |
@@ -72,6 +65,7 @@ Türkçe e-ticaret arayüzü.
 | **payment-service** | 8084 | `paymentdb` | OrderCreated **consumer**, Payment{Succeeded\|Failed} **publisher** | `GET /api/payments`, `GET /api/payments/order/{id}` |
 | **notification-service** | 8085 | `notificationdb` | UserRegistered + OrderConfirmed + OrderCancelled **consumer** (fan-out) | `GET /api/notifications`, `GET /api/notifications/unread-count`, `PATCH /api/notifications/{id}/read`, `DELETE /api/notifications/{id}` |
 | **review-service** | 8086 | `reviewdb` | — | `GET /api/reviews/product/{id}`, `GET /api/reviews/product/{id}/stats`, `POST /api/reviews`, `DELETE /api/reviews/{id}` |
+| **search-service** | 8087 | Elasticsearch `products` index | — | `GET /api/search?q=&category=&brand=&minPrice=&maxPrice=&minRating=&sort=&page=&size=`, `POST /api/search/reindex` |
 | **api-gateway** | 8000 | — | — | Public giriş noktası, tüm `/api/**` yolları uygun servise yönlendirir |
 
 Her Spring Boot servisi `/actuator/health` ve `/actuator/info` açar. auth-service Swagger UI'sı
@@ -148,6 +142,38 @@ sadece **routing key + payload alan adları**; servisler birbirinin Java sınıf
 
 ---
 
+## Arama (search-service + Elasticsearch)
+
+**Index**: `products` — product-service'teki kataloğun denormalize kopyası. Metin alanları
+ES'in built-in `turkish` analyzer'ı ile indekslenir, böylece "telefonlar" → "telefon"
+kökleme ve diakritik (ç, ğ, ı, ö, ş, ü) normalize işlemleri sorgu zamanında çalışır.
+
+**Sorgu yetenekleri** (`GET /api/search`):
+
+| Parametre | Amaç |
+|-----------|------|
+| `q` | `multi_match` ile `name^3 / brand^2 / description` üzerinde arama + `fuzziness: AUTO` (yazım hatası toleransı) |
+| `category`, `brand` | Keyword term filter |
+| `minPrice`, `maxPrice` | `discountedPrice` üzerinde range filter |
+| `minRating` | `rating ≥ X` filter |
+| `sort` | `relevance` (varsayılan) \| `price_asc` \| `price_desc` \| `rating_desc` |
+| `page`, `size` | Sayfalama |
+
+**Facets**: her sorgu sonucu, aynı sorgu için ES aggregations üzerinden şu bilgileri
+döner → frontend sol paneldeki filtreleri bu cevapla render eder:
+
+- `brands` — marka başına ürün sayısı
+- `categories` — kategori başına ürün sayısı
+- `price` — `{ min, max }` aralığı
+
+**Sync stratejisi**: `ProductIndexer`, servis açılışında `product-service`'ten
+`/api/products` üzerinden sayfa sayfa pull edip bulk indexler. Bu, demo için yeterli
+bir reconciliation yaklaşımıdır. `product-service` gelecekte `product.created/updated/deleted`
+event'leri yayınlarsa, `@RabbitListener` ana yol olur ve bu bootstrap fallback olarak
+kalır. `POST /api/search/reindex` manuel tetikleme için.
+
+---
+
 ## Frontend
 
 `frontend/` — Vite + React 18 + TypeScript + Tailwind. Üretimde nginx arkasında çalışır,
@@ -172,7 +198,8 @@ frontend/src/
     ├── basket/           # store, api, BasketPage
     ├── orders/           # api, CheckoutPage, OrdersPage, OrderDetailPage (polls PENDING)
     ├── reviews/          # ReviewList (embedded on product page)
-    └── notifications/    # NotificationBell (polls unread-count every 15s)
+    ├── notifications/    # NotificationBell (polls unread-count every 15s)
+    └── search/           # SearchPage + FacetSidebar + SearchResultCard (ES-backed)
 ```
 
 ### Saga'yı tarayıcıdan görme
@@ -183,6 +210,16 @@ frontend/src/
   onaylandı" bildirimi düşer.
 - **Başarısız ödeme**: e-postanda "fail" varsa veya toplam 100.000 TRY'ı aşarsa sipariş
   birkaç saniye içinde `CANCELLED`'a döner, iptal bildirimi gelir.
+
+### Arama deneyimi
+
+- Navbar arama çubuğu ve kategori chip'leri `/search` rotasına gider — hepsi
+  Elasticsearch üzerinden çalışır.
+- URL, tüm filtrelerin tek kaynağıdır (`?q=&category=&brand=&minPrice=&...`); geri tuşu,
+  sayfa yenileme ve deep link paylaşımı doğal çalışır.
+- Sol facet paneli, her sorgu cevabındaki aggregations ile canlı güncellenir — seçim
+  yapıldıkça diğer facet sayıları da revize olur.
+- "telefoon" gibi yazım hataları `fuzziness: AUTO` ile düzeltilir.
 
 ---
 
@@ -202,14 +239,17 @@ Tüm bileşenler ayağa kalkınca:
 | <http://localhost:8000> | API gateway |
 | <http://localhost:8000/swagger-ui.html> | auth-service Swagger UI |
 | <http://localhost:15672> | RabbitMQ yönetim paneli (`guest` / `guest`) |
+| <http://localhost:9200> | Elasticsearch HTTP API |
+| <http://localhost:9200/products/_search?pretty> | Ürün index'ini doğrudan sorgulama |
 | <http://localhost:5432> | PostgreSQL (`postgres` / `postgres`) |
 
-Gateway, yedi servisin healthcheck'lerinin `healthy` olmasını bekler — ilk soğuk açılış
-1–2 dakika sürebilir.
+Gateway, sekiz servisin + Elasticsearch'ün healthcheck'lerinin `healthy` olmasını bekler
+— ilk soğuk açılış 1–2 dakika sürebilir (ES cluster'ın `yellow`'a gelmesi + indexer'ın
+ürünleri çekmesi dahil).
 
 ### Lokal geliştirme
 
-**Gereksinimler:** Java 21, Maven, Node 20, PostgreSQL 16, RabbitMQ.
+**Gereksinimler:** Java 21, Maven, Node 20, PostgreSQL 16, RabbitMQ, Elasticsearch 8.
 
 Her servisi kendi dizininden ayrı ayrı başlat:
 
@@ -217,6 +257,12 @@ Her servisi kendi dizininden ayrı ayrı başlat:
 # Örnek: auth-service
 cd services/auth-service
 ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
+
+# search-service (product-service önce ayakta olmalı)
+cd services/search-service
+ELASTICSEARCH_URIS=http://localhost:9200 \
+PRODUCT_SERVICE_URI=http://localhost:8082 \
+  ./mvnw spring-boot:run
 
 # Frontend
 cd frontend
@@ -233,6 +279,9 @@ npm run dev          # http://localhost:5173, /api proxied to :8000
 | `JWT_SECRET` | (demo key) | **Production'da mutlaka değiştir.** Tüm servislerin JWT imzalı/doğrulanmış tokenları aynı secret ile kullanır. |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` | `postgres` / `postgres` | Tek Postgres instance, servis başına ayrı DB. |
 | `RABBITMQ_DEFAULT_USER` / `_PASS` | `guest` / `guest` | AMQP 5672, yönetim UI 15672. |
+| `ELASTICSEARCH_URIS` | `http://elasticsearch:9200` | search-service'in ES adresi. |
+| `PRODUCT_SERVICE_URI` | `http://product-service:8082` | search-service bootstrap indexer'ının pull hedefi. |
+| `ES_JAVA_OPTS` | `-Xms512m -Xmx512m` | ES heap. Daha az RAM'li makinelerde 256m'e düşürülebilir. |
 | `JWT_ACCESS_TOKEN_EXPIRY` | `900000` (15 dk) | Access token süresi (ms). |
 | `JWT_REFRESH_TOKEN_EXPIRY` | `604800000` (7 gün) | Refresh token süresi. |
 
@@ -246,12 +295,14 @@ Per-servis override'lar her Dockerfile/application.yml içinde dokümante edildi
   `GlobalExceptionHandler`'ı `ProblemDetail` döner (`status`, `title`, `detail`, `instance`,
   `timestamp`, validasyonda `fields`, rate-limit'te `retryAfterSeconds`).
 - **Migrations**: Flyway; her servisin `src/main/resources/db/migration/` klasöründe.
-  Schema değişiklikleri yalnızca yeni `V{n}__*.sql` dosyasıyla.
+  Schema değişiklikleri yalnızca yeni `V{n}__*.sql` dosyasıyla. (search-service'in
+  relational DB'si yoktur; ES mapping `@Document` anotasyonlarıyla gelir.)
 - **JPA auditing**: `BaseEntity` ile `createdAt` / `updatedAt` otomatik.
 - **Docker**: multi-stage build, çalışma image'i `eclipse-temurin:21-jre-alpine`,
   non-root `appuser`.
 - **Healthcheck**: her servis kendi `/actuator/health` endpoint'iyle compose
-  `depends_on: condition: service_healthy` kuralına uygun.
+  `depends_on: condition: service_healthy` kuralına uygun. Elasticsearch
+  `_cluster/health?wait_for_status=yellow` ile sağlıklı kabul edilir.
 
 ---
 
@@ -263,6 +314,8 @@ Per-servis override'lar her Dockerfile/application.yml içinde dokümante edildi
 - `/api/auth/**` üzerinde Bucket4j ile IP başına dk/10 rate limit.
 - Kayıt şifresi: **8+ karakter · büyük harf · rakam · özel karakter** (`@StrongPassword`).
 - Gateway tek giriş noktası; mikroservisler Docker ağı dışına expose edilmez.
+- Elasticsearch lokal demo için `xpack.security` kapalı çalışır — **production'da mutlaka
+  TLS + credential zorunlu yap**.
 
 ---
 
