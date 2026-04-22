@@ -11,6 +11,8 @@ import java.util.EnumSet;
 import com.example.jwtjava.exception.ResourceNotFoundException;
 import com.example.jwtjava.exception.UserAlreadyExistsException;
 import com.example.jwtjava.repository.UserRepository;
+import com.example.jwtjava.saga.SagaEventPublisher;
+import com.example.jwtjava.saga.UserRegisteredEvent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -26,6 +28,7 @@ public class AuthService {
     private final JwtService jwtService;
     private final RefreshTokenService refreshTokenService;
     private final AuthenticationManager authenticationManager;
+    private final SagaEventPublisher sagaEventPublisher;
 
     public AuthResponse register(RegisterRequest request) {
         if (userRepository.existsByEmail(request.email())) {
@@ -40,6 +43,12 @@ public class AuthService {
                 .build();
 
         userRepository.save(user);
+
+        // Kick off the registration saga — basket-service will create an empty
+        // basket for this user, and compensate back to us if it fails.
+        sagaEventPublisher.publishUserRegistered(
+                UserRegisteredEvent.of(user.getId(), user.getEmail(), user.getFullName())
+        );
 
         String accessToken = jwtService.generateAccessToken(user);
         RefreshToken refreshToken = refreshTokenService.createRefreshToken(user);

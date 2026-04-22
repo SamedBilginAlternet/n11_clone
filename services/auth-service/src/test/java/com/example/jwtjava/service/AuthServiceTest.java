@@ -7,6 +7,7 @@ import com.example.jwtjava.entity.Role;
 import com.example.jwtjava.entity.User;
 import com.example.jwtjava.exception.UserAlreadyExistsException;
 import com.example.jwtjava.repository.UserRepository;
+import com.example.jwtjava.saga.SagaEventPublisher;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,6 +20,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.Instant;
+import java.util.EnumSet;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -34,13 +36,14 @@ class AuthServiceTest {
     @Mock JwtService jwtService;
     @Mock RefreshTokenService refreshTokenService;
     @Mock AuthenticationManager authenticationManager;
+    @Mock SagaEventPublisher sagaEventPublisher;
 
     @InjectMocks AuthService authService;
 
     private User stubUser() {
         return User.builder()
                 .id(1L).email("user@example.com")
-                .password("encoded").fullName("Test User").role(Role.USER)
+                .password("encoded").fullName("Test User").roles(EnumSet.of(Role.USER))
                 .build();
     }
 

@@ -81,6 +81,12 @@
             <version>8.10.1</version>
         </dependency>
 
+        <!-- Messaging: RabbitMQ for saga choreography -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-amqp</artifactId>
+        </dependency>
+
         <!-- Actuator -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
