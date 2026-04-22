@@ -50,6 +50,19 @@ services:
       retries: 5
     command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
 
+  eureka-server:
+    build: ./services/eureka-server
+    container_name: n11-eureka
+    ports:
+      - "${EUREKA_PORT:-18761}:8761"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8761/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: on-failure
+
   jaeger:
     image: jaegertracing/all-in-one:1.57
     container_name: n11-jaeger
@@ -167,6 +180,7 @@ services:
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: "5672"
       JWT_SECRET: ${JWT_SECRET:-3f6a2b8c1d4e5f7a9b0c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a}
+      EUREKA_URI: http://eureka-server:8761/eureka
       MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
       MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
       JWT_ACCESS_TOKEN_EXPIRY: "900000"
@@ -175,6 +189,8 @@ services:
       postgres:
         condition: service_healthy
       rabbitmq:
+        condition: service_healthy
+      eureka-server:
         condition: service_healthy
     expose:
       - "8080"
@@ -196,12 +212,15 @@ services:
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: "5672"
       JWT_SECRET: ${JWT_SECRET:-3f6a2b8c1d4e5f7a9b0c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a}
+      EUREKA_URI: http://eureka-server:8761/eureka
       MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
       MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
     depends_on:
       postgres:
         condition: service_healthy
       rabbitmq:
+        condition: service_healthy
+      eureka-server:
         condition: service_healthy
     expose:
       - "8081"
@@ -222,12 +241,15 @@ services:
       SPRING_DATASOURCE_PASSWORD: postgres
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: "6379"
+      EUREKA_URI: http://eureka-server:8761/eureka
       MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
       MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
     depends_on:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      eureka-server:
         condition: service_healthy
     expose:
       - "8082"
@@ -249,12 +271,15 @@ services:
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: "5672"
       JWT_SECRET: ${JWT_SECRET:-3f6a2b8c1d4e5f7a9b0c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a}
+      EUREKA_URI: http://eureka-server:8761/eureka
       MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
       MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
     depends_on:
       postgres:
         condition: service_healthy
       rabbitmq:
+        condition: service_healthy
+      eureka-server:
         condition: service_healthy
     expose:
       - "8083"
@@ -276,12 +301,15 @@ services:
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: "5672"
       JWT_SECRET: ${JWT_SECRET:-3f6a2b8c1d4e5f7a9b0c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a}
+      EUREKA_URI: http://eureka-server:8761/eureka
       MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
       MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
     depends_on:
       postgres:
         condition: service_healthy
       rabbitmq:
+        condition: service_healthy
+      eureka-server:
         condition: service_healthy
     expose:
       - "8084"
@@ -303,12 +331,15 @@ services:
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: "5672"
       JWT_SECRET: ${JWT_SECRET:-3f6a2b8c1d4e5f7a9b0c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a}
+      EUREKA_URI: http://eureka-server:8761/eureka
       MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
       MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
     depends_on:
       postgres:
         condition: service_healthy
       rabbitmq:
+        condition: service_healthy
+      eureka-server:
         condition: service_healthy
     expose:
       - "8085"
@@ -328,10 +359,13 @@ services:
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
       JWT_SECRET: ${JWT_SECRET:-3f6a2b8c1d4e5f7a9b0c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a}
+      EUREKA_URI: http://eureka-server:8761/eureka
       MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
       MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
     depends_on:
       postgres:
+        condition: service_healthy
+      eureka-server:
         condition: service_healthy
     expose:
       - "8086"
@@ -352,12 +386,15 @@ services:
       SPRING_DATASOURCE_PASSWORD: postgres
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: "5672"
+      EUREKA_URI: http://eureka-server:8761/eureka
       MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
       MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
     depends_on:
       postgres:
         condition: service_healthy
       rabbitmq:
+        condition: service_healthy
+      eureka-server:
         condition: service_healthy
     expose:
       - "8088"
@@ -375,12 +412,15 @@ services:
     environment:
       ELASTICSEARCH_URIS: http://elasticsearch:9200
       PRODUCT_SERVICE_URI: http://product-service:8082
+      EUREKA_URI: http://eureka-server:8761/eureka
       MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
       MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
     depends_on:
       elasticsearch:
         condition: service_healthy
       product-service:
+        condition: service_healthy
+      eureka-server:
         condition: service_healthy
     expose:
       - "8087"
@@ -405,6 +445,7 @@ services:
       REVIEW_SERVICE_URI: http://review-service:8086
       SEARCH_SERVICE_URI: http://search-service:8087
       INVENTORY_SERVICE_URI: http://inventory-service:8088
+      EUREKA_URI: http://eureka-server:8761/eureka
       MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
       MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
     depends_on:
@@ -425,6 +466,8 @@ services:
       search-service:
         condition: service_healthy
       inventory-service:
+        condition: service_healthy
+      eureka-server:
         condition: service_healthy
     ports:
       - "${GATEWAY_PORT:-18000}:8000"
