@@ -30,6 +30,11 @@ public class SagaRabbitConfig {
     }
 
     @Bean
+    public Queue inventoryOutOfStockQueue() {
+        return new Queue(SagaTopology.INVENTORY_OUT_OF_STOCK_QUEUE, true);
+    }
+
+    @Bean
     public Binding paymentSucceededBinding(Queue paymentSucceededQueue, TopicExchange sagaExchange) {
         return BindingBuilder.bind(paymentSucceededQueue).to(sagaExchange)
                 .with(SagaTopology.PAYMENT_SUCCEEDED_ROUTING_KEY);
@@ -39,6 +44,12 @@ public class SagaRabbitConfig {
     public Binding paymentFailedBinding(Queue paymentFailedQueue, TopicExchange sagaExchange) {
         return BindingBuilder.bind(paymentFailedQueue).to(sagaExchange)
                 .with(SagaTopology.PAYMENT_FAILED_ROUTING_KEY);
+    }
+
+    @Bean
+    public Binding inventoryOutOfStockBinding(Queue inventoryOutOfStockQueue, TopicExchange sagaExchange) {
+        return BindingBuilder.bind(inventoryOutOfStockQueue).to(sagaExchange)
+                .with(SagaTopology.INVENTORY_OUT_OF_STOCK_ROUTING_KEY);
     }
 
     @Bean

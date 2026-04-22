@@ -3,7 +3,7 @@ package com.example.payment.service;
 import com.example.payment.entity.PaymentStatus;
 import com.example.payment.entity.PaymentTransaction;
 import com.example.payment.repository.PaymentRepository;
-import com.example.payment.saga.OrderCreatedEvent;
+import com.example.payment.saga.InventoryReservedEvent;
 import com.example.payment.saga.PaymentFailedEvent;
 import com.example.payment.saga.PaymentSucceededEvent;
 import com.example.payment.saga.SagaTopology;
@@ -33,8 +33,8 @@ class PaymentProcessorTest {
 
     @InjectMocks PaymentProcessor processor;
 
-    private OrderCreatedEvent event(String email, String amount) {
-        return new OrderCreatedEvent("evt", Instant.now(), 1L, email, new BigDecimal(amount));
+    private InventoryReservedEvent event(String email, String amount) {
+        return new InventoryReservedEvent("evt", Instant.now(), 1L, email, new BigDecimal(amount));
     }
 
     @Test

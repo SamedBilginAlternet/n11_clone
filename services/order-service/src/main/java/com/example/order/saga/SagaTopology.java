@@ -20,10 +20,12 @@ public final class SagaTopology {
     public static final String PAYMENT_FAILED_ROUTING_KEY = "payment.failed";
     public static final String ORDER_CONFIRMED_ROUTING_KEY = "order.confirmed";
     public static final String ORDER_CANCELLED_ROUTING_KEY = "order.cancelled";
+    public static final String INVENTORY_OUT_OF_STOCK_ROUTING_KEY = "inventory.out-of-stock";
 
-    // order-service listens on these two to advance its own state machine
+    // order-service listens on these to advance its own state machine
     public static final String PAYMENT_SUCCEEDED_QUEUE = "order.payment-succeeded.queue";
     public static final String PAYMENT_FAILED_QUEUE = "order.payment-failed.queue";
+    public static final String INVENTORY_OUT_OF_STOCK_QUEUE = "order.inventory-out-of-stock.queue";
 
     private SagaTopology() {}
 }

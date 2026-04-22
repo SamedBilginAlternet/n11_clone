@@ -20,14 +20,14 @@ public class SagaRabbitConfig {
     }
 
     @Bean
-    public Queue orderCreatedQueue() {
-        return new Queue(SagaTopology.ORDER_CREATED_QUEUE, true);
+    public Queue inventoryReservedQueue() {
+        return new Queue(SagaTopology.INVENTORY_RESERVED_QUEUE, true);
     }
 
     @Bean
-    public Binding orderCreatedBinding(Queue orderCreatedQueue, TopicExchange sagaExchange) {
-        return BindingBuilder.bind(orderCreatedQueue).to(sagaExchange)
-                .with(SagaTopology.ORDER_CREATED_ROUTING_KEY);
+    public Binding inventoryReservedBinding(Queue inventoryReservedQueue, TopicExchange sagaExchange) {
+        return BindingBuilder.bind(inventoryReservedQueue).to(sagaExchange)
+                .with(SagaTopology.INVENTORY_RESERVED_ROUTING_KEY);
     }
 
     @Bean

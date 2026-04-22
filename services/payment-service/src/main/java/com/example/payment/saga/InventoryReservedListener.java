@@ -9,13 +9,13 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class OrderCreatedListener {
+public class InventoryReservedListener {
 
     private final PaymentProcessor paymentProcessor;
 
-    @RabbitListener(queues = SagaTopology.ORDER_CREATED_QUEUE)
-    public void onOrderCreated(OrderCreatedEvent event) {
-        log.info("OrderCreated orderId={} amount={} — charging", event.orderId(), event.totalAmount());
+    @RabbitListener(queues = SagaTopology.INVENTORY_RESERVED_QUEUE)
+    public void onInventoryReserved(InventoryReservedEvent event) {
+        log.info("InventoryReserved orderId={} amount={} — charging", event.orderId(), event.totalAmount());
         paymentProcessor.process(event);
     }
 }

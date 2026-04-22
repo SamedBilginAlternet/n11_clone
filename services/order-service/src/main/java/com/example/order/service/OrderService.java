@@ -52,10 +52,14 @@ public class OrderService {
         orderRepository.save(order);
         log.info("Order persisted PENDING id={} email={} total={}", order.getId(), userEmail, total);
 
-        // Kick off saga: payment-service will charge and respond with
-        // PaymentSucceeded or PaymentFailed on the saga exchange.
+        // Kick off saga: inventory-service will try to reserve stock, and if
+        // that succeeds payment-service charges next. If either step fails the
+        // order flips to CANCELLED via the paired listener.
+        List<OrderCreatedEvent.Line> lines = order.getItems().stream()
+                .map(i -> new OrderCreatedEvent.Line(i.getProductId(), i.getQuantity()))
+                .toList();
         sagaEventPublisher.publishOrderCreated(
-                OrderCreatedEvent.of(order.getId(), userEmail, total));
+                OrderCreatedEvent.of(order.getId(), userEmail, total, lines));
 
         return OrderResponse.from(order);
     }
