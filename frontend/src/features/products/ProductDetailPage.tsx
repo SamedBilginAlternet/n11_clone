@@ -12,6 +12,7 @@ import { Badge } from '../../shared/ui/Badge';
 import { Button } from '../../shared/ui/Button';
 import { Card } from '../../shared/ui/Card';
 import { RatingStars } from '../../shared/ui/RatingStars';
+import { ReviewList } from '../reviews/ReviewList';
 
 export function ProductDetailPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -114,6 +115,10 @@ export function ProductDetailPage() {
         >
           {product.stockQuantity === 0 ? 'Stokta Yok' : 'Sepete Ekle'}
         </Button>
+      </div>
+
+      <div className="md:col-span-2">
+        <ReviewList productId={product.id} />
       </div>
     </Card>
   );

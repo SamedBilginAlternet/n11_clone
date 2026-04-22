@@ -5,6 +5,9 @@ import { ProductDetailPage } from '../features/products/ProductDetailPage';
 import { LoginPage } from '../features/auth/LoginPage';
 import { RegisterPage } from '../features/auth/RegisterPage';
 import { BasketPage } from '../features/basket/BasketPage';
+import { CheckoutPage } from '../features/orders/CheckoutPage';
+import { OrdersPage } from '../features/orders/OrdersPage';
+import { OrderDetailPage } from '../features/orders/OrderDetailPage';
 import { useAuthStore } from '../features/auth/store';
 
 function RequireAuth({ children }: { children: JSX.Element }) {
@@ -26,6 +29,30 @@ export const router = createBrowserRouter([
         element: (
           <RequireAuth>
             <BasketPage />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: 'checkout',
+        element: (
+          <RequireAuth>
+            <CheckoutPage />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: 'orders',
+        element: (
+          <RequireAuth>
+            <OrdersPage />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: 'orders/:id',
+        element: (
+          <RequireAuth>
+            <OrderDetailPage />
           </RequireAuth>
         ),
       },

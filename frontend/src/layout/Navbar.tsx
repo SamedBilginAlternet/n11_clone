@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useAuthStore } from '../features/auth/store';
 import { useBasketStore } from '../features/basket/store';
 import { authApi } from '../features/auth/api';
+import { NotificationBell } from '../features/notifications/NotificationBell';
 import { useToast } from '../shared/providers/ToastProvider';
 
 export function Navbar() {
@@ -54,6 +55,7 @@ export function Navbar() {
               <Link to="/orders" className="hidden md:inline px-3 py-1.5 rounded-md hover:bg-white/10">
                 Siparişler
               </Link>
+              <NotificationBell />
               <Link
                 to="/basket"
                 className="relative flex items-center gap-1 px-3 py-1.5 rounded-md hover:bg-white/10"
