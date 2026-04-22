@@ -1,16 +1,19 @@
-# n11 Clone — Mikroservis + Saga Pattern + Elasticsearch + React
+# n11 Clone — Mikroservis + Saga Pattern + Elasticsearch + Tracing + React
 
-Spring Boot 3.3 / Java 21 tabanlı **8 mikroservis**, RabbitMQ üzerinde
+Spring Boot 3.3 / Java 21 tabanlı **9 mikroservis**, RabbitMQ üzerinde
 **choreography-based Saga pattern**, Elasticsearch ile **faceted full-text search**,
-Spring Cloud Gateway, ve React + Vite + Tailwind ile yazılmış n11 tarzı Türkçe
-e-ticaret arayüzü.
+OpenTelemetry + Jaeger ile **distributed tracing**, Spring Cloud Gateway, ve React +
+Vite + Tailwind ile yazılmış n11 tarzı Türkçe e-ticaret arayüzü.
 
 İki saga koreografisi iki farklı gerçek dağıtık işlem sorununu çözer:
 
 - **UserRegistrationSaga** — yeni kullanıcı için otomatik sepet oluşturma + başarısızlıkta
   kullanıcıyı geri silme (compensation).
-- **CheckoutSaga** — sipariş → ödeme → sepet temizleme + bildirim; ödeme reddedilirse
-  siparişi CANCELLED'a alma + kullanıcıyı bilgilendirme.
+- **CheckoutSaga** — sipariş → **stok rezervasyonu** → ödeme → sepet temizleme + bildirim;
+  stok yetersizse veya ödeme reddedilirse siparişi CANCELLED'a alma, rezerve edilen stoğu
+  geri bırakma ve kullanıcıyı bilgilendirme.
+
+CI/CD: GitHub Actions her push'ta 9 servis + frontend için paralel build + test koşar.
 
 ---
 
@@ -66,6 +69,7 @@ e-ticaret arayüzü.
 | **notification-service** | 8085 | `notificationdb` | UserRegistered + OrderConfirmed + OrderCancelled **consumer** (fan-out) | `GET /api/notifications`, `GET /api/notifications/unread-count`, `PATCH /api/notifications/{id}/read`, `DELETE /api/notifications/{id}` |
 | **review-service** | 8086 | `reviewdb` | — | `GET /api/reviews/product/{id}`, `GET /api/reviews/product/{id}/stats`, `POST /api/reviews`, `DELETE /api/reviews/{id}` |
 | **search-service** | 8087 | Elasticsearch `products` index | — | `GET /api/search?q=&category=&brand=&minPrice=&maxPrice=&minRating=&sort=&page=&size=`, `POST /api/search/reindex` |
+| **inventory-service** | 8088 | `inventorydb` | OrderCreated **consumer** (reserve), OrderCancelled **consumer** (release), InventoryReserved + InventoryOutOfStock **publisher** | `GET /api/inventory`, `GET /api/inventory/{productId}` |
 | **api-gateway** | 8000 | — | — | Public giriş noktası, tüm `/api/**` yolları uygun servise yönlendirir |
 
 Her Spring Boot servisi `/actuator/health` ve `/actuator/info` açar. auth-service Swagger UI'sı
@@ -93,27 +97,42 @@ auth.register()
             └─► users.delete  ← compensation
 ```
 
-### 2. CheckoutSaga (sipariş + ödeme)
+### 2. CheckoutSaga (sipariş + stok rezervasyonu + ödeme)
 
 ```
 order.checkout()
  ├─► orders.insert (status=PENDING)
- └─► publish "order.created"
+ └─► publish "order.created"  (includes [productId, quantity] lines)
           │
           ▼
-     payment-service.onOrderCreated()
-      ├─► payment_transactions.insert
-      ├─► [mock decision]
-      ├─► publish "payment.succeeded"            ┌─► publish "payment.failed"
-      │                                          │
-      ▼                                          ▼
- order-service.onPaymentSucceeded()         order-service.onPaymentFailed()
-  ├─► orders.status = PAID                   ├─► orders.status = CANCELLED
-  └─► publish "order.confirmed"              └─► publish "order.cancelled"
-           │                                              │
-           ├───► basket-service.clear()                   │
-           └───► notification-service.save(CONFIRMED)     ├───► notification-service.save(CANCELLED)
+     inventory-service.onOrderCreated()                  ← atomically reserves all lines
+      ├─► inventory_items: available--, reserved++
+      ├─► reservations.insert per line
+      │
+      ├─► publish "inventory.reserved"    ┌─► publish "inventory.out-of-stock"
+      ▼                                    ▼
+ payment-service.onInventoryReserved()   order-service.onInventoryOutOfStock()
+  ├─► payment_transactions.insert         ├─► orders.status = CANCELLED
+  ├─► [mock decision]                     └─► publish "order.cancelled"
+  │                                              └─► inventory releases stock (idempotent)
+  ├─► publish "payment.succeeded"    ┌─► publish "payment.failed"
+  ▼                                   ▼
+ order-service.onPaymentSucceeded()  order-service.onPaymentFailed()
+  ├─► orders.status = PAID            ├─► orders.status = CANCELLED
+  └─► publish "order.confirmed"       └─► publish "order.cancelled"
+       │                                     │
+       ├─► basket.clear()                    ├─► inventory releases reserved stock
+       └─► notification.save(CONFIRMED)      └─► notification.save(CANCELLED)
 ```
+
+Three explicit failure modes, each with compensation:
+
+1. **Inventory out-of-stock** — siparişi CANCELLED'a al, hiç ödeme almadığımız için kart
+   hareketi yok, sadece kullanıcıya bildirim.
+2. **Payment declined** — stok zaten rezerve edildi; `order.cancelled` inventory-service
+   tarafından da tüketilir ve rezervasyonlar serbest bırakılır.
+3. **İdempotent retry** — `release(orderId)` rezervasyon yoksa no-op; aynı event'in
+   yeniden teslimi stok sayılarını bozmaz.
 
 Mock ödeme karar mantığı (`payment-service`):
 
@@ -121,7 +140,9 @@ Mock ödeme karar mantığı (`payment-service`):
 - tutar > 100.000 TRY → ödeme reddedilir
 - aksi halde onaylanır
 
-Böylece happy path ve compensation path UI'dan rahatça tetiklenebilir.
+Böylece üç başarısızlık yolu da UI'dan rahatça tetiklenebilir: `failuser@n11demo.com`
+ile ödeme reddi, büyük miktarlı sepet ile limit aşımı, ve inventory seed'indeki
+stoktan fazla ürün sipariş ederek out-of-stock.
 
 ### RabbitMQ topolojisi
 
@@ -131,11 +152,13 @@ Tek bir topic exchange: `saga.exchange`.
 |-------------|------------|---------|
 | `user.registered` | auth | basket, notification |
 | `basket.creation.failed` | basket | auth |
-| `order.created` | order | payment |
+| `order.created` | order | inventory |
+| `inventory.reserved` | inventory | payment |
+| `inventory.out-of-stock` | inventory | order |
 | `payment.succeeded` | payment | order |
 | `payment.failed` | payment | order |
 | `order.confirmed` | order | basket, notification |
-| `order.cancelled` | order | notification |
+| `order.cancelled` | order | inventory, notification |
 
 Her servis **kendi queue'sunu** aynı exchange'e uygun routing key ile bind eder. Kontrat
 sadece **routing key + payload alan adları**; servisler birbirinin Java sınıflarını paylaşmaz.
@@ -239,13 +262,14 @@ Tüm bileşenler ayağa kalkınca:
 | <http://localhost:8000> | API gateway |
 | <http://localhost:8000/swagger-ui.html> | auth-service Swagger UI |
 | <http://localhost:15672> | RabbitMQ yönetim paneli (`guest` / `guest`) |
+| <http://localhost:16686> | **Jaeger UI** — saga trace waterfall'unu buradan izle |
 | <http://localhost:9200> | Elasticsearch HTTP API |
 | <http://localhost:9200/products/_search?pretty> | Ürün index'ini doğrudan sorgulama |
 | <http://localhost:5432> | PostgreSQL (`postgres` / `postgres`) |
 
-Gateway, sekiz servisin + Elasticsearch'ün healthcheck'lerinin `healthy` olmasını bekler
-— ilk soğuk açılış 1–2 dakika sürebilir (ES cluster'ın `yellow`'a gelmesi + indexer'ın
-ürünleri çekmesi dahil).
+Gateway, dokuz servisin + Elasticsearch'ün + Jaeger'ın healthcheck'lerinin `healthy`
+olmasını bekler — ilk soğuk açılış 1–2 dakika sürebilir (ES cluster'ın `yellow`'a
+gelmesi + indexer'ın ürünleri çekmesi dahil).
 
 ### Demo hesapları
 
@@ -332,6 +356,57 @@ Per-servis override'lar her Dockerfile/application.yml içinde dokümante edildi
 
 ---
 
+## Distributed Tracing (OpenTelemetry + Jaeger)
+
+Her servis `micrometer-tracing-bridge-otel` + `opentelemetry-exporter-otlp` ile gelir ve
+OTLP HTTP üzerinden Jaeger'a (`http://jaeger:4318/v1/traces`) `%100` örnekleme ile span
+gönderir. Spring Web / WebClient / RestClient / RabbitTemplate / Spring Data zaten
+Micrometer-observed olduğu için tek bir `POST /api/orders/checkout` şu sırayı tek bir
+**trace waterfall** olarak üretir:
+
+```
+browser → gateway → order-service (HTTP)
+                  → RabbitMQ publish  (order.created)
+                                     → inventory-service (AMQP consume)
+                                     → PostgreSQL (reserve + insert)
+                                     → RabbitMQ publish (inventory.reserved)
+                                                        → payment-service
+                                                        → RabbitMQ publish (payment.succeeded)
+                                                                           → order-service
+                                                                           → RabbitMQ publish (order.confirmed)
+                                                                                              → basket, notification
+```
+
+Jaeger UI'da <http://localhost:16686> → `service = order-service` → son trace'i aç →
+sağdaki timeline saga'nın bütün adımlarını sürüklenebilir bir waterfall olarak gösterir.
+Bu, saga'nın soyut tarafını somutlaştıran en hızlı yol.
+
+Tracing env vars (compose otomatik set ediyor):
+
+| Değişken | Değer |
+|----------|-------|
+| `MANAGEMENT_OTLP_TRACING_ENDPOINT` | `http://jaeger:4318/v1/traces` |
+| `MANAGEMENT_TRACING_SAMPLING_PROBABILITY` | `1.0` |
+
+Production'da sampling'i düşürün (`0.1` gibi) — %100 sadece demo için.
+
+---
+
+## CI
+
+`.github/workflows/ci.yml` her `push` ve `pull_request`'te:
+
+- **backend job** — matrix build: 9 servisin her biri için `mvn -B -ntp verify`.
+  Maven dependency cache açık. `verify` test suite'ini ve Spring Boot packaging'i
+  çalıştırır.
+- **frontend job** — `npm run build` (`tsc -b` dahil), böylece TS tip hataları
+  pipeline'ı düşürür.
+- Concurrency group aynı branch'e yeni push gelince in-flight run'ları iptal eder.
+
+Badge eklemek için: `![CI](https://github.com/SamedBilginAlternet/JwtJava/actions/workflows/ci.yml/badge.svg)`
+
+---
+
 ## Test
 
 Her servisin kendi testleri var. Tek bir servis için:
@@ -359,6 +434,7 @@ gerektirmezler, milisaniyeler içinde koşarlar. auth-service'in integration tes
 | **payment-service** | `PaymentProcessorTest` | Karar matrisi (normal / "fail" e-posta / limit aşımı / tam sınır), transaction persist + saga event'inin doğru routing key'e gitmesi |
 | **review-service** | `ReviewControllerTest` | (product, user) tekilliği, display name'in e-postadan türetilmesi, DELETE'in sahibine scoped olması (yabancı review → 404) |
 | **notification-service** | `NotificationEventListenerTest` | 3 saga event'inin doğru `NotificationType`'a map'lenmesi, Türkçe para formatı, `read=false` default'u |
+| **inventory-service** | `InventoryServiceTest` | All-or-nothing reservation, OutOfStockException'da rollback, unknown product → fail, release stok restorasyon matematiği, release idempotency |
 
 ---
 
