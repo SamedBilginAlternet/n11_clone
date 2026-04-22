@@ -3,6 +3,7 @@ package com.example.notification.saga;
 import com.example.notification.entity.Notification;
 import com.example.notification.entity.NotificationType;
 import com.example.notification.repository.NotificationRepository;
+import com.example.notification.service.NotificationPushService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,6 +22,7 @@ import static org.mockito.Mockito.verify;
 class NotificationEventListenerTest {
 
     @Mock NotificationRepository repo;
+    @Mock NotificationPushService pushService;
 
     @InjectMocks NotificationEventListener listener;
 
