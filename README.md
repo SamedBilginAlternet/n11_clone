@@ -1,104 +1,188 @@
-# JWT Refresh Token API
+# n11 Clone — Mikroservis + Saga Pattern + React
 
-Spring Boot 3 ile geliştirilmiş, production-ready JWT kimlik doğrulama servisi.
-Access Token + Refresh Token mimarisini, token rotation, rate limiting ve Flyway migrations ile birlikte uygular.
+Spring Boot 3.3 / Java 21 tabanlı 7 mikroservis, RabbitMQ üzerinde **choreography-based
+Saga pattern**, Spring Cloud Gateway, ve React + Vite + Tailwind ile yazılmış n11 tarzı
+Türkçe e-ticaret arayüzü.
 
----
+İki saga koreografisi iki farklı gerçek dağıtık işlem sorununu çözer:
 
-## Teknolojiler
-
-| Katman | Teknoloji |
-|--------|-----------|
-| Framework | Spring Boot 3.3, Java 21 |
-| Security | Spring Security 6, jjwt 0.12 |
-| Veritabanı | PostgreSQL 16, Spring Data JPA |
-| Migration | Flyway |
-| Rate Limiting | Bucket4j |
-| Dokümantasyon | SpringDoc OpenAPI 3 / Swagger UI |
-| Monitoring | Spring Boot Actuator |
-| Build | Maven |
-| Container | Docker, Docker Compose |
+- **UserRegistrationSaga** — yeni kullanıcı için otomatik sepet oluşturma + başarısızlıkta
+  kullanıcıyı geri silme (compensation).
+- **CheckoutSaga** — sipariş → ödeme → sepet temizleme + bildirim; ödeme reddedilirse
+  siparişi CANCELLED'a alma + kullanıcıyı bilgilendirme.
 
 ---
 
 ## Mimari
 
 ```
-src/main/java/com/example/jwtjava/
-├── config/
-│   ├── SecurityConfig.java           # Filter chain, CORS, stateless session
-│   ├── OpenApiConfig.java            # Swagger UI + Bearer scheme
-│   ├── CustomAuthEntryPoint.java     # JSON 401
-│   ├── CustomAccessDeniedHandler.java# JSON 403
-│   └── GlobalExceptionHandler.java   # Unified ErrorResponse for all errors
-├── controller/
-│   ├── AuthController.java           # /api/auth/**
-│   └── UserController.java           # /api/users/**
-├── dto/
-│   ├── RegisterRequest.java
-│   ├── LoginRequest.java
-│   ├── RefreshRequest.java
-│   ├── AuthResponse.java
-│   └── ErrorResponse.java            # Consistent error envelope
-├── entity/
-│   ├── BaseEntity.java               # createdAt / updatedAt (JPA Auditing)
-│   ├── User.java
-│   ├── RefreshToken.java
-│   └── Role.java
-├── exception/
-│   ├── AuthException.java            # Base — carries HttpStatus
-│   ├── TokenException.java           # 401
-│   ├── UserAlreadyExistsException.java # 409
-│   └── ResourceNotFoundException.java  # 404
-├── filter/
-│   ├── JwtAuthFilter.java            # Per-request token validation
-│   ├── RateLimitFilter.java          # Bucket4j — 10 req/min per IP on /api/auth/**
-│   └── RequestLoggingFilter.java     # MDC correlation ID + request timing
-├── repository/
-│   ├── UserRepository.java
-│   └── RefreshTokenRepository.java
-├── service/
-│   ├── JwtService.java               # Token generation & validation
-│   ├── RefreshTokenService.java      # Create, validate, revoke
-│   ├── AuthService.java              # register / login / refresh / logout
-│   └── UserDetailsServiceImpl.java
-└── validation/
-    ├── StrongPassword.java           # Custom annotation
-    └── StrongPasswordValidator.java  # Uppercase + digit + special char
+                         ┌──────────────────────┐
+          browser ─────► │  frontend (nginx)    │  :3000
+                         │  React + Vite + TS   │
+                         └──────────┬───────────┘
+                                    │  /api/*  (proxied)
+                         ┌──────────▼───────────┐
+                         │   api-gateway        │  :8000
+                         │   Spring Cloud GW    │
+                         └──┬──────────────────┬┘
+                            │                  │
+        ┌───────────────────┼────────┬─────────┼──────────────┬──────────────┐
+        ▼                   ▼        ▼         ▼              ▼              ▼
+  ┌─────────────┐   ┌──────────────┐ ┌──────────────┐  ┌──────────────┐ ┌──────────────┐
+  │ auth        │   │ basket       │ │ product      │  │ order        │ │ review       │
+  │ :8080       │   │ :8081        │ │ :8082        │  │ :8083        │ │ :8086        │
+  │ authdb      │   │ basketdb     │ │ productdb    │  │ orderdb      │ │ reviewdb     │
+  └──────┬──────┘   └──────┬───────┘ └──────────────┘  └──────┬───────┘ └──────────────┘
+         │                 │                                   │
+         │                 │        ┌──────────────┐           │
+         │                 │        │ payment      │           │
+         │                 │        │ :8084        │           │
+         │                 │        │ paymentdb    │           │
+         │                 │        └──────┬───────┘           │
+         │                 │               │                    │
+         │                 │        ┌──────▼───────┐            │
+         │                 │        │ notification │            │
+         │                 │        │ :8085        │            │
+         │                 │        │ notif.db     │            │
+         │                 │        └──────┬───────┘            │
+         │                 │               │                    │
+         └─────────────────┴────────┬──────┴────────────────────┘
+                                    ▼
+                         ┌────────────────────┐
+                         │    RabbitMQ        │  :5672 / :15672 (mgmt UI)
+                         │    saga.exchange   │
+                         └────────────────────┘
+                                    │
+                         ┌──────────▼─────────┐
+                         │   PostgreSQL 16    │  :5432
+                         │   (per-service DB) │
+                         └────────────────────┘
 ```
 
 ---
 
-## Token Akışı
+## Servisler
 
-```
-POST /api/auth/register  ──►  Access Token (15 dk) + Refresh Token (7 gün)
-POST /api/auth/login     ──►  Access Token (15 dk) + Refresh Token (7 gün)
+| Servis | Port | DB | Saga Rolü | Temel endpoint'ler |
+|--------|------|----|-----------|--------------------|
+| **auth-service** | 8080 | `authdb` | UserRegistered **publisher** + BasketCreationFailed **compensator** | `POST /api/auth/register\|login\|refresh\|logout`, `GET /api/users/me` |
+| **basket-service** | 8081 | `basketdb` | UserRegistered **consumer** (empty cart), OrderConfirmed **consumer** (clear cart) | `GET /api/basket`, `POST /api/basket/items`, `PUT/DELETE /api/basket/items/{id}` |
+| **product-service** | 8082 | `productdb` | — | `GET /api/products?category=&q=`, `GET /api/products/{id}`, `GET /api/products/slug/{slug}`, `GET /api/products/categories` |
+| **order-service** | 8083 | `orderdb` | OrderCreated **publisher**, Payment{Succeeded\|Failed} **consumer**, Order{Confirmed\|Cancelled} **publisher** | `POST /api/orders/checkout`, `GET /api/orders`, `GET /api/orders/{id}` |
+| **payment-service** | 8084 | `paymentdb` | OrderCreated **consumer**, Payment{Succeeded\|Failed} **publisher** | `GET /api/payments`, `GET /api/payments/order/{id}` |
+| **notification-service** | 8085 | `notificationdb` | UserRegistered + OrderConfirmed + OrderCancelled **consumer** (fan-out) | `GET /api/notifications`, `GET /api/notifications/unread-count`, `PATCH /api/notifications/{id}/read`, `DELETE /api/notifications/{id}` |
+| **review-service** | 8086 | `reviewdb` | — | `GET /api/reviews/product/{id}`, `GET /api/reviews/product/{id}/stats`, `POST /api/reviews`, `DELETE /api/reviews/{id}` |
+| **api-gateway** | 8000 | — | — | Public giriş noktası, tüm `/api/**` yolları uygun servise yönlendirir |
 
-GET  /api/users/me
-  Authorization: Bearer <access_token>
-
-POST /api/auth/refresh   ──►  Yeni Access Token + Yeni Refresh Token
-  { "refreshToken": "..." }       (eski refresh token iptal edilir — rotation)
-
-POST /api/auth/logout
-  { "refreshToken": "..." }       (refresh token DB'den revoke edilir)
-```
+Her Spring Boot servisi `/actuator/health` ve `/actuator/info` açar. auth-service Swagger UI'sı
+gateway üzerinden `http://localhost:8000/swagger-ui.html`.
 
 ---
 
-## API Endpoint'leri
+## Saga Akışları
 
-| Method | Path | Auth | Açıklama |
-|--------|------|------|----------|
-| POST | `/api/auth/register` | — | Yeni kullanıcı kaydı |
-| POST | `/api/auth/login` | — | Giriş |
-| POST | `/api/auth/refresh` | — | Access token yenile |
-| POST | `/api/auth/logout` | — | Oturumu kapat |
-| GET | `/api/users/me` | Bearer | Mevcut kullanıcı |
-| GET | `/api/users/admin` | Bearer + ADMIN | Admin endpoint |
-| GET | `/actuator/health` | — | Uygulama sağlığı |
-| GET | `/swagger-ui.html` | — | API dokümantasyonu |
+### 1. UserRegistrationSaga (kayıt)
+
+```
+auth.register()
+ ├─► users.insert
+ └─► publish "user.registered"
+          │
+          ▼
+     basket-service.onUserRegistered()
+      ├─► baskets.insert (empty)
+      └─► (hata olursa)
+           publish "basket.creation.failed"
+                │
+                ▼
+           auth-service.onBasketCreationFailed()
+            └─► users.delete  ← compensation
+```
+
+### 2. CheckoutSaga (sipariş + ödeme)
+
+```
+order.checkout()
+ ├─► orders.insert (status=PENDING)
+ └─► publish "order.created"
+          │
+          ▼
+     payment-service.onOrderCreated()
+      ├─► payment_transactions.insert
+      ├─► [mock decision]
+      ├─► publish "payment.succeeded"            ┌─► publish "payment.failed"
+      │                                          │
+      ▼                                          ▼
+ order-service.onPaymentSucceeded()         order-service.onPaymentFailed()
+  ├─► orders.status = PAID                   ├─► orders.status = CANCELLED
+  └─► publish "order.confirmed"              └─► publish "order.cancelled"
+           │                                              │
+           ├───► basket-service.clear()                   │
+           └───► notification-service.save(CONFIRMED)     ├───► notification-service.save(CANCELLED)
+```
+
+Mock ödeme karar mantığı (`payment-service`):
+
+- e-posta "fail" içeriyor → ödeme reddedilir
+- tutar > 100.000 TRY → ödeme reddedilir
+- aksi halde onaylanır
+
+Böylece happy path ve compensation path UI'dan rahatça tetiklenebilir.
+
+### RabbitMQ topolojisi
+
+Tek bir topic exchange: `saga.exchange`.
+
+| Routing key | Yayın eden | Tüketen |
+|-------------|------------|---------|
+| `user.registered` | auth | basket, notification |
+| `basket.creation.failed` | basket | auth |
+| `order.created` | order | payment |
+| `payment.succeeded` | payment | order |
+| `payment.failed` | payment | order |
+| `order.confirmed` | order | basket, notification |
+| `order.cancelled` | order | notification |
+
+Her servis **kendi queue'sunu** aynı exchange'e uygun routing key ile bind eder. Kontrat
+sadece **routing key + payload alan adları**; servisler birbirinin Java sınıflarını paylaşmaz.
+
+---
+
+## Frontend
+
+`frontend/` — Vite + React 18 + TypeScript + Tailwind. Üretimde nginx arkasında çalışır,
+`/api/*` gateway'e proxy'lenir (CORS preflight yok).
+
+### Klasör yapısı (feature-based)
+
+```
+frontend/src/
+├── app/                  # router + ErrorBoundary
+├── layout/               # Navbar + Layout
+├── shared/
+│   ├── api/client.ts     # apiFetch + ApiError (RFC 7807 aware)
+│   ├── api/problem.ts    # errorMessage / errorFields helpers
+│   ├── hooks/useApi.ts   # data + loading + error + refetch (race-safe)
+│   ├── providers/ToastProvider.tsx
+│   ├── ui/{Button,Input,Card,Spinner,Badge,RatingStars}.tsx
+│   └── utils/format.ts   # formatTRY, formatDateTime
+└── features/
+    ├── auth/             # store (zustand+persist), api, Login/RegisterPage
+    ├── products/         # HomePage, ProductDetailPage, ProductCard, CategoryBar
+    ├── basket/           # store, api, BasketPage
+    ├── orders/           # api, CheckoutPage, OrdersPage, OrderDetailPage (polls PENDING)
+    ├── reviews/          # ReviewList (embedded on product page)
+    └── notifications/    # NotificationBell (polls unread-count every 15s)
+```
+
+### Saga'yı tarayıcıdan görme
+
+- **Kayıt**: `/register` → giriş yapılır → 1–2 sn içinde zilde "Hoş geldin" bildirimi.
+- **Başarılı ödeme**: ürün → sepet → `/checkout` → `/orders/{id}` sayfası 2 sn'de bir
+  polluyor, `PENDING → PAID` geçişi canlı görülür. Sepet otomatik boşalır, "Siparişin
+  onaylandı" bildirimi düşer.
+- **Başarısız ödeme**: e-postanda "fail" varsa veya toplam 100.000 TRY'ı aşarsa sipariş
+  birkaç saniye içinde `CANCELLED`'a döner, iptal bildirimi gelir.
 
 ---
 
@@ -107,72 +191,113 @@ POST /api/auth/logout
 ### Docker ile (önerilen)
 
 ```bash
-docker-compose up --build
+docker compose up --build
 ```
 
-Uygulama `http://localhost:8080` adresinde çalışır.
+Tüm bileşenler ayağa kalkınca:
+
+| URL | Ne? |
+|-----|-----|
+| <http://localhost:3000> | React arayüzü |
+| <http://localhost:8000> | API gateway |
+| <http://localhost:8000/swagger-ui.html> | auth-service Swagger UI |
+| <http://localhost:15672> | RabbitMQ yönetim paneli (`guest` / `guest`) |
+| <http://localhost:5432> | PostgreSQL (`postgres` / `postgres`) |
+
+Gateway, yedi servisin healthcheck'lerinin `healthy` olmasını bekler — ilk soğuk açılış
+1–2 dakika sürebilir.
 
 ### Lokal geliştirme
 
-**Gereksinimler:** Java 21, Maven, PostgreSQL
+**Gereksinimler:** Java 21, Maven, Node 20, PostgreSQL 16, RabbitMQ.
+
+Her servisi kendi dizininden ayrı ayrı başlat:
 
 ```bash
-# Veritabanı oluştur
-psql -U postgres -c "CREATE DATABASE jwtjava;"
-
-# Uygulamayı başlat (dev profili ile)
+# Örnek: auth-service
+cd services/auth-service
 ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
+
+# Frontend
+cd frontend
+npm install
+npm run dev          # http://localhost:5173, /api proxied to :8000
 ```
 
 ---
 
-## Ortam Değişkenleri
+## Ortam Değişkenleri (Docker)
 
-| Değişken | Varsayılan | Açıklama |
-|----------|-----------|----------|
-| `SPRING_DATASOURCE_URL` | `jdbc:postgresql://localhost:5432/jwtjava` | Veritabanı URL |
-| `SPRING_DATASOURCE_USERNAME` | `postgres` | DB kullanıcısı |
-| `SPRING_DATASOURCE_PASSWORD` | `postgres` | DB şifresi |
-| `JWT_SECRET` | *(varsayılan key)* | **Production'da mutlaka değiştirin** |
-| `JWT_ACCESS_TOKEN_EXPIRY` | `900000` | Access token süresi (ms) |
-| `JWT_REFRESH_TOKEN_EXPIRY` | `604800000` | Refresh token süresi (ms) |
+| Değişken | Varsayılan | Notlar |
+|----------|-----------|--------|
+| `JWT_SECRET` | (demo key) | **Production'da mutlaka değiştir.** Tüm servislerin JWT imzalı/doğrulanmış tokenları aynı secret ile kullanır. |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` | `postgres` / `postgres` | Tek Postgres instance, servis başına ayrı DB. |
+| `RABBITMQ_DEFAULT_USER` / `_PASS` | `guest` / `guest` | AMQP 5672, yönetim UI 15672. |
+| `JWT_ACCESS_TOKEN_EXPIRY` | `900000` (15 dk) | Access token süresi (ms). |
+| `JWT_REFRESH_TOKEN_EXPIRY` | `604800000` (7 gün) | Refresh token süresi. |
 
----
-
-## Şifre Politikası
-
-Kayıt sırasında şifre aşağıdaki kurallara uymalıdır:
-
-- Minimum **8 karakter**
-- En az **1 büyük harf**
-- En az **1 rakam**
-- En az **1 özel karakter** (`!@#$%` vb.)
+Per-servis override'lar her Dockerfile/application.yml içinde dokümante edildi.
 
 ---
 
-## Rate Limiting
+## Standartlar
 
-`/api/auth/**` endpoint'lerine IP başına **dakikada 10 istek** sınırı uygulanır.
-Limit aşılırsa `429 Too Many Requests` döner ve `Retry-After: 60` header'ı eklenir.
-
----
-
-## Testleri Çalıştır
-
-```bash
-./mvnw test
-```
-
-Kapsam:
-- `JwtServiceTest` — token üretimi, doğrulama, expiry
-- `AuthServiceTest` — register/login akışları, hata senaryoları
-- `StrongPasswordValidatorTest` — şifre politikası kuralları
+- **Error envelope**: RFC 7807 `application/problem+json`. Tüm servislerin
+  `GlobalExceptionHandler`'ı `ProblemDetail` döner (`status`, `title`, `detail`, `instance`,
+  `timestamp`, validasyonda `fields`, rate-limit'te `retryAfterSeconds`).
+- **Migrations**: Flyway; her servisin `src/main/resources/db/migration/` klasöründe.
+  Schema değişiklikleri yalnızca yeni `V{n}__*.sql` dosyasıyla.
+- **JPA auditing**: `BaseEntity` ile `createdAt` / `updatedAt` otomatik.
+- **Docker**: multi-stage build, çalışma image'i `eclipse-temurin:21-jre-alpine`,
+  non-root `appuser`.
+- **Healthcheck**: her servis kendi `/actuator/health` endpoint'iyle compose
+  `depends_on: condition: service_healthy` kuralına uygun.
 
 ---
 
 ## Güvenlik Notları
 
-- JWT secret **en az 256-bit** olmalı ve ortam değişkeninden okunmalıdır
-- Refresh token'lar veritabanında saklanır ve her `/refresh` çağrısında **rotate** edilir
-- Çalıntı refresh token tespit edilirse `revokeAllUserTokens` ile tüm token'lar iptal edilebilir
-- Docker container'ı **root olmayan kullanıcı** ile çalışır
+- JWT secret **en az 256-bit** olmalı ve ortam değişkeninden okunmalıdır.
+- Refresh token'lar auth-service DB'sinde saklanır ve her `/refresh` çağrısında **rotate**
+  edilir (eski revoke edilir + yeni üretilir).
+- `/api/auth/**` üzerinde Bucket4j ile IP başına dk/10 rate limit.
+- Kayıt şifresi: **8+ karakter · büyük harf · rakam · özel karakter** (`@StrongPassword`).
+- Gateway tek giriş noktası; mikroservisler Docker ağı dışına expose edilmez.
+
+---
+
+## Test
+
+Birim ve integration testleri auth-service'te mevcut:
+
+```bash
+cd services/auth-service && ./mvnw test
+```
+
+- `JwtServiceTest` — token üretimi/doğrulama, expiry.
+- `AuthServiceTest` — register/login, UserAlreadyExistsException, saga publisher mock'lanır.
+- `StrongPasswordValidatorTest` — şifre politikası.
+- `AuthControllerIntegrationTest`, `UserControllerIntegrationTest` — `@SpringBootTest` +
+  H2, RFC 7807 cevap doğrulaması (`application/problem+json`).
+
+Diğer servisler için testler opsiyonel olarak eklenebilir — mevcut auth-service testleri
+saga'nın yayınladığı event'i `SagaEventPublisher` mock'u ile izole doğruluyor.
+
+---
+
+## Commit Konvansiyonu
+
+Tek özellik → tek commit. Conventional Commits benzeri prefix kullanılır:
+
+- `feat:` yeni özellik / servis
+- `fix:` hata düzeltmesi
+- `refactor:` davranışı değiştirmeyen iç yeniden yapılanma
+- `chore:` compose / build / altyapı
+- `docs:` README vb.
+- `test:` test ekleme
+
+---
+
+## Lisans
+
+Eğitim amaçlı demo projesi; production için değildir.
