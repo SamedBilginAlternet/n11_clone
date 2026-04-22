@@ -1,3 +1,68 @@
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { productApi } from '../api/products';
+import { Category, PageResult, Product } from '../types';
+import { ProductCard } from '../components/ProductCard';
+import { CategoryBar } from '../components/CategoryBar';
+
 export function HomePage() {
-  return <div className="text-gray-500">Ana sayfa yükleniyor...</div>;
+  const [params] = useSearchParams();
+  const category = params.get('category') ?? undefined;
+  const q = params.get('q') ?? undefined;
+
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [page, setPage] = useState<PageResult<Product> | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    productApi.categories().then(setCategories).catch(() => setCategories([]));
+  }, []);
+
+  useEffect(() => {
+    setLoading(true);
+    setError(null);
+    productApi
+      .list({ category, q, page: 0, size: 24 })
+      .then(setPage)
+      .catch((e) => setError(e.message ?? 'Ürünler yüklenemedi.'))
+      .finally(() => setLoading(false));
+  }, [category, q]);
+
+  const heading = q
+    ? `"${q}" için arama sonuçları`
+    : category
+      ? categories.find((c) => c.slug === category)?.name ?? category
+      : 'Günün Fırsatları';
+
+  return (
+    <div className="space-y-6">
+      <CategoryBar categories={categories} />
+
+      <div className="n11-gradient rounded-xl p-6 text-white">
+        <h1 className="text-2xl font-bold">{heading}</h1>
+        <p className="text-sm opacity-90 mt-1">
+          {page ? `${page.totalElements} ürün bulundu` : 'Ürünler yükleniyor...'}
+        </p>
+      </div>
+
+      {error && <div className="bg-red-50 text-red-700 p-3 rounded">{error}</div>}
+
+      {loading ? (
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+          {Array.from({ length: 12 }).map((_, i) => (
+            <div key={i} className="aspect-[3/4] bg-white border border-gray-200 rounded-lg animate-pulse" />
+          ))}
+        </div>
+      ) : page && page.content.length === 0 ? (
+        <div className="text-center text-gray-500 py-12">Bu kriterlere uygun ürün bulunamadı.</div>
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+          {page?.content.map((p) => (
+            <ProductCard key={p.id} product={p} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
