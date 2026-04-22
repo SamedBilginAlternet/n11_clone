@@ -32,6 +32,21 @@ services:
       timeout: 5s
       retries: 5
 
+  jaeger:
+    image: jaegertracing/all-in-one:1.57
+    container_name: n11-jaeger
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"  # UI
+      - "4317:4317"    # OTLP gRPC
+      - "4318:4318"    # OTLP HTTP
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:14269/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.14.0
     container_name: n11-elasticsearch
@@ -65,6 +80,8 @@ services:
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: "5672"
       JWT_SECRET: ${JWT_SECRET:-3f6a2b8c1d4e5f7a9b0c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a}
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
       JWT_ACCESS_TOKEN_EXPIRY: "900000"
       JWT_REFRESH_TOKEN_EXPIRY: "604800000"
     depends_on:
@@ -92,6 +109,8 @@ services:
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: "5672"
       JWT_SECRET: ${JWT_SECRET:-3f6a2b8c1d4e5f7a9b0c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a}
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
     depends_on:
       postgres:
         condition: service_healthy
@@ -114,6 +133,8 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/productdb
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
     depends_on:
       postgres:
         condition: service_healthy
@@ -137,6 +158,8 @@ services:
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: "5672"
       JWT_SECRET: ${JWT_SECRET:-3f6a2b8c1d4e5f7a9b0c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a}
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
     depends_on:
       postgres:
         condition: service_healthy
@@ -162,6 +185,8 @@ services:
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: "5672"
       JWT_SECRET: ${JWT_SECRET:-3f6a2b8c1d4e5f7a9b0c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a}
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
     depends_on:
       postgres:
         condition: service_healthy
@@ -187,6 +212,8 @@ services:
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: "5672"
       JWT_SECRET: ${JWT_SECRET:-3f6a2b8c1d4e5f7a9b0c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a}
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
     depends_on:
       postgres:
         condition: service_healthy
@@ -210,6 +237,8 @@ services:
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
       JWT_SECRET: ${JWT_SECRET:-3f6a2b8c1d4e5f7a9b0c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a}
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
     depends_on:
       postgres:
         condition: service_healthy
@@ -229,6 +258,8 @@ services:
     environment:
       ELASTICSEARCH_URIS: http://elasticsearch:9200
       PRODUCT_SERVICE_URI: http://product-service:8082
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
     depends_on:
       elasticsearch:
         condition: service_healthy
@@ -256,6 +287,8 @@ services:
       NOTIFICATION_SERVICE_URI: http://notification-service:8085
       REVIEW_SERVICE_URI: http://review-service:8086
       SEARCH_SERVICE_URI: http://search-service:8087
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
     depends_on:
       auth-service:
         condition: service_healthy
