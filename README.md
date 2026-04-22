@@ -1,6 +1,6 @@
 # n11 Clone — Mikroservis + Saga + Elasticsearch + Observability + React
 
-Spring Boot 3.3 / Java 21 tabanlı **9 mikroservis**, RabbitMQ üzerinde
+Spring Boot 3.3 / Java 21 tabanlı **10 mikroservis**, RabbitMQ üzerinde
 **choreography-based Saga pattern**, Elasticsearch ile **faceted full-text search**,
 **üç-sütunlu observability stack** (Prometheus + Grafana + Jaeger + Loki), Spring Cloud
 Gateway, ve React + Vite + Tailwind ile yazılmış n11 tarzı Türkçe e-ticaret arayüzü.
@@ -22,7 +22,7 @@ Gateway, ve React + Vite + Tailwind ile yazılmış n11 tarzı Türkçe e-ticare
   loglarını Loki'ye gönderir, Grafana'da aranabilir. Her log satırında
   `[correlationId, traceId]` — log ↔ trace iki yönlü click-through var.
 
-CI/CD: GitHub Actions her push'ta 9 servis + frontend için paralel build + test koşar.
+CI/CD: GitHub Actions her push'ta 10 servis + frontend için paralel build + test koşar.
 
 ---
 
@@ -260,10 +260,18 @@ frontend/src/
 ### Docker ile (önerilen)
 
 ```bash
+# Port çakışması varsa — otomatik boş port bulur ve .env'e yazar:
+./setup-ports.sh
+
+# Ayağa kaldır:
 docker compose up --build
 ```
 
-Tüm bileşenler ayağa kalkınca:
+`setup-ports.sh` makinedeki meşgul portları tespit eder, her servis için boş bir port
+bulur ve `.env` dosyasına yazar. Çakışma yoksa varsayılan portlar korunur. `.env`
+dosyası olmadan da çalışır — bu durumda aşağıdaki varsayılanlar geçerlidir.
+
+Tüm bileşenler ayağa kalkınca (varsayılan portlar):
 
 | URL | Ne? |
 |-----|-----|
@@ -279,7 +287,10 @@ Tüm bileşenler ayağa kalkınca:
 | <http://localhost:9200/products/_search?pretty> | Ürün index'ini doğrudan sorgulama |
 | <http://localhost:5432> | PostgreSQL (`postgres` / `postgres`) |
 
-Gateway, dokuz servisin + Elasticsearch'ün + Jaeger'ın healthcheck'lerinin `healthy`
+> **Not:** `./setup-ports.sh` çalıştırdıysanız portlar farklı olabilir — `.env` dosyasına
+> veya script çıktısına bakın.
+
+Gateway, on servisin + Elasticsearch'ün + Jaeger'ın healthcheck'lerinin `healthy`
 olmasını bekler — ilk soğuk açılış 1–2 dakika sürebilir (ES cluster'ın `yellow`'a
 gelmesi + indexer'ın ürünleri çekmesi dahil).
 
@@ -334,6 +345,26 @@ npm run dev          # http://localhost:5173, /api proxied to :8000
 | `JWT_ACCESS_TOKEN_EXPIRY` | `900000` (15 dk) | Access token süresi (ms). |
 | `JWT_REFRESH_TOKEN_EXPIRY` | `604800000` (7 gün) | Refresh token süresi. |
 
+### Host Port Override'ları
+
+Tüm host port'ları ortam değişkeniyle değiştirilebilir. `./setup-ports.sh` bunları
+otomatik bulur, ama elle `.env` dosyasına da yazabilirsiniz (bkz. `.env.example`):
+
+| Değişken | Varsayılan | Servis |
+|----------|-----------|--------|
+| `POSTGRES_PORT` | `5432` | PostgreSQL |
+| `RABBITMQ_PORT` | `5672` | RabbitMQ AMQP |
+| `RABBITMQ_MGMT_PORT` | `15672` | RabbitMQ Management UI |
+| `JAEGER_UI_PORT` | `16686` | Jaeger UI |
+| `JAEGER_GRPC_PORT` | `4317` | Jaeger OTLP gRPC |
+| `JAEGER_HTTP_PORT` | `4318` | Jaeger OTLP HTTP |
+| `LOKI_PORT` | `3100` | Loki |
+| `PROMETHEUS_PORT` | `9090` | Prometheus |
+| `GRAFANA_PORT` | `3001` | Grafana |
+| `ELASTICSEARCH_PORT` | `9200` | Elasticsearch |
+| `GATEWAY_PORT` | `8000` | API Gateway |
+| `FRONTEND_PORT` | `3000` | React Frontend |
+
 Per-servis override'lar her Dockerfile/application.yml içinde dokümante edildi.
 
 ---
@@ -361,7 +392,7 @@ Per-servis override'lar her Dockerfile/application.yml içinde dokümante edildi
 - Refresh token'lar auth-service DB'sinde saklanır ve her `/refresh` çağrısında **rotate**
   edilir (eski revoke edilir + yeni üretilir).
 - `/api/auth/**` üzerinde Bucket4j ile IP başına dk/10 rate limit.
-- Kayıt şifresi: **8+ karakter · büyük harf · rakam · özel karakter** (`@StrongPassword`).
+- Kayıt şifresi: **8+ karakter · büyük harf · küçük harf · rakam · özel karakter** (`@StrongPassword`).
 - Gateway tek giriş noktası; mikroservisler Docker ağı dışına expose edilmez.
 - Elasticsearch lokal demo için `xpack.security` kapalı çalışır — **production'da mutlaka
   TLS + credential zorunlu yap**.
@@ -474,7 +505,7 @@ gerekmiyor; `docker logs <container>` de olduğu gibi çalışır.
 
 `.github/workflows/ci.yml` her `push` ve `pull_request`'te:
 
-- **backend job** — matrix build: 9 servisin her biri için `mvn -B -ntp verify`.
+- **backend job** — matrix build: 10 servisin her biri için `mvn -B -ntp verify`.
   Maven dependency cache açık. `verify` test suite'ini ve Spring Boot packaging'i
   çalıştırır.
 - **frontend job** — `npm run build` (`tsc -b` dahil), böylece TS tip hataları
