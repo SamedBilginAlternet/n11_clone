@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { notificationApi } from './api';
 import { Notification, NotificationType } from './types';
 import { useAuthStore } from '../auth/store';
+import { useNotificationSocket } from './useNotificationSocket';
 import { formatDateTime } from '../../shared/utils/format';
 
 const ICONS: Record<NotificationType, string> = {
@@ -19,26 +20,26 @@ export function NotificationBell() {
   const [loading, setLoading] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Poll unread count every 15s while authed
+  // Fetch unread count once on mount (no polling — WebSocket handles updates)
   useEffect(() => {
     if (!authed) {
       setUnread(0);
       setItems([]);
       return;
     }
-    let cancelled = false;
-    const fetchCount = () =>
-      notificationApi
-        .unreadCount()
-        .then((r) => !cancelled && setUnread(r.count))
-        .catch(() => {});
-    void fetchCount();
-    const id = window.setInterval(fetchCount, 15000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(id);
-    };
+    notificationApi
+      .unreadCount()
+      .then((r) => setUnread(r.count))
+      .catch(() => {});
   }, [authed]);
+
+  // Real-time notifications via WebSocket
+  const handleNewNotification = useCallback((n: Notification) => {
+    setUnread((c) => c + 1);
+    setItems((prev) => [n, ...prev]);
+  }, []);
+
+  useNotificationSocket(handleNewNotification);
 
   // Click outside to close
   useEffect(() => {
