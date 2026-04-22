@@ -36,6 +36,20 @@ services:
       retries: 10
       start_period: 30s
 
+  redis:
+    image: redis:7-alpine
+    container_name: n11-redis
+    ports:
+      - "${REDIS_PORT:-16379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
+
   jaeger:
     image: jaegertracing/all-in-one:1.57
     container_name: n11-jaeger
@@ -206,10 +220,14 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/productdb
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: "6379"
       MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
       MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     expose:
       - "8082"
@@ -428,3 +446,4 @@ volumes:
   prometheus_data:
   grafana_data:
   loki_data:
+  redis_data:
