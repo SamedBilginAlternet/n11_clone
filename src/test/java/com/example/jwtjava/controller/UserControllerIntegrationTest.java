@@ -32,7 +32,10 @@ class UserControllerIntegrationTest {
     void getMe_noToken_returns401() throws Exception {
         mockMvc.perform(get("/api/users/me"))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.error").isNotEmpty());
+                .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+                .andExpect(jsonPath("$.status").value(401))
+                .andExpect(jsonPath("$.detail").isNotEmpty())
+                .andExpect(jsonPath("$.instance").value("/api/users/me"));
     }
 
     @Test
@@ -66,7 +69,10 @@ class UserControllerIntegrationTest {
         mockMvc.perform(get("/api/users/admin")
                         .header("Authorization", "Bearer " + accessToken))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.error").isNotEmpty());
+                .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+                .andExpect(jsonPath("$.status").value(403))
+                .andExpect(jsonPath("$.detail").isNotEmpty())
+                .andExpect(jsonPath("$.instance").value("/api/users/admin"));
     }
 
     @Test

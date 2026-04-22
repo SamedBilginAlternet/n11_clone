@@ -13,7 +13,6 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -44,7 +43,7 @@ class AuthControllerIntegrationTest {
     }
 
     @Test
-    @DisplayName("POST /api/auth/register with duplicate email → 409")
+    @DisplayName("POST /api/auth/register with duplicate email → 409 problem+json")
     void register_duplicateEmail_returns409() throws Exception {
         mockMvc.perform(post("/api/auth/register")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -54,26 +53,33 @@ class AuthControllerIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(registerJson(EMAIL, PASSWORD, NAME)))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.error").isNotEmpty());
+                .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+                .andExpect(jsonPath("$.status").value(409))
+                .andExpect(jsonPath("$.detail").isNotEmpty())
+                .andExpect(jsonPath("$.instance").value("/api/auth/register"))
+                .andExpect(jsonPath("$.timestamp").isNotEmpty());
     }
 
     @Test
-    @DisplayName("POST /api/auth/register with weak password → 400 with field error")
+    @DisplayName("POST /api/auth/register with weak password → 400 with fields")
     void register_weakPassword_returns400() throws Exception {
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(registerJson(EMAIL, "weak", NAME)))
                 .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+                .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.fields.password").isNotEmpty());
     }
 
     @Test
-    @DisplayName("POST /api/auth/register with invalid email → 400")
+    @DisplayName("POST /api/auth/register with invalid email → 400 with fields")
     void register_invalidEmail_returns400() throws Exception {
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(registerJson("not-an-email", PASSWORD, NAME)))
                 .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
                 .andExpect(jsonPath("$.fields.email").isNotEmpty());
     }
 
@@ -93,14 +99,17 @@ class AuthControllerIntegrationTest {
     }
 
     @Test
-    @DisplayName("POST /api/auth/login with wrong password → 401")
+    @DisplayName("POST /api/auth/login with wrong password → 401 problem+json")
     void login_wrongPassword_returns401() throws Exception {
         registerUser();
 
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(loginJson(EMAIL, "WrongPass1!")))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isUnauthorized())
+                .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+                .andExpect(jsonPath("$.status").value(401))
+                .andExpect(jsonPath("$.detail").isNotEmpty());
     }
 
     @Test
@@ -132,12 +141,10 @@ class AuthControllerIntegrationTest {
     void refresh_reuse_returns401() throws Exception {
         String refreshToken = registerUser().refreshToken();
 
-        // First use — consumes the token (rotation)
         mockMvc.perform(post("/api/auth/refresh")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(refreshJson(refreshToken)));
 
-        // Second use of the same token must be rejected
         mockMvc.perform(post("/api/auth/refresh")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(refreshJson(refreshToken)))
@@ -145,8 +152,8 @@ class AuthControllerIntegrationTest {
     }
 
     @Test
-    @DisplayName("POST /api/auth/refresh with bogus token → 401")
-    void refresh_bogusToken_returns401() throws Exception {
+    @DisplayName("POST /api/auth/refresh with bogus token → 400")
+    void refresh_bogusToken_returns400() throws Exception {
         mockMvc.perform(post("/api/auth/refresh")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(refreshJson("this-is-not-a-real-token")))
