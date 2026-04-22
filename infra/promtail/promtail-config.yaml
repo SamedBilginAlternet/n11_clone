@@ -1,0 +1,56 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+  log_level: info
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+        filters:
+          # Only scrape containers that are part of our compose project.
+          # compose tags everything with com.docker.compose.project=<dir name>.
+          - name: label
+            values: ["com.docker.compose.project"]
+
+    relabel_configs:
+      # Drop /docker/<hash> prefix Docker adds to container names.
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/(.*)'
+        target_label: container
+
+      # Map compose service name so queries can filter by service=auth-service etc.
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_service']
+        target_label: service
+
+      # Ignore infra containers (postgres, rabbit, ES, jaeger, prometheus, grafana,
+      # loki itself, promtail) so the Logs view is about application services.
+      # Comment this block out if you want infra logs too.
+      - source_labels: [service]
+        regex: 'postgres|rabbitmq|elasticsearch|jaeger|prometheus|grafana|loki|promtail|frontend'
+        action: keep_equal
+        target_label: ignored
+      - source_labels: [service]
+        regex: 'postgres|rabbitmq|elasticsearch|jaeger|prometheus|grafana|loki|promtail|frontend'
+        action: drop
+
+    pipeline_stages:
+      # Strip Docker JSON log wrapper and extract the plain message.
+      - docker: {}
+
+      # Spring Boot line shape:
+      #   2026-04-22 14:23:45.678 INFO  [corrId,traceId] com.x.Y - message
+      - regex:
+          expression: '^(?P<ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3})\s+(?P<level>[A-Z]+)\s+\[(?P<correlationId>[^,]*),(?P<traceId>[^\]]*)\]\s+(?P<logger>\S+)\s+-\s+(?P<msg>.*)$'
+
+      - labels:
+          level:
+          correlationId:
+          traceId:
