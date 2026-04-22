@@ -13,43 +13,43 @@ spring:
             allowCredentials: true
       routes:
         - id: auth-service
-          uri: ${AUTH_SERVICE_URI:http://localhost:8080}
+          uri: lb://auth-service
           predicates:
             - Path=/api/auth/**,/api/users/**
         - id: basket-service
-          uri: ${BASKET_SERVICE_URI:http://localhost:8081}
+          uri: lb://basket-service
           predicates:
             - Path=/api/basket/**
         - id: product-service
-          uri: ${PRODUCT_SERVICE_URI:http://localhost:8082}
+          uri: lb://product-service
           predicates:
             - Path=/api/products/**
         - id: order-service
-          uri: ${ORDER_SERVICE_URI:http://localhost:8083}
+          uri: lb://order-service
           predicates:
             - Path=/api/orders/**
         - id: payment-service
-          uri: ${PAYMENT_SERVICE_URI:http://localhost:8084}
+          uri: lb://payment-service
           predicates:
             - Path=/api/payments/**
         - id: notification-ws
-          uri: ${NOTIFICATION_SERVICE_URI:http://localhost:8085}
+          uri: lb://notification-service
           predicates:
             - Path=/ws/**
         - id: notification-service
-          uri: ${NOTIFICATION_SERVICE_URI:http://localhost:8085}
+          uri: lb://notification-service
           predicates:
             - Path=/api/notifications/**
         - id: review-service
-          uri: ${REVIEW_SERVICE_URI:http://localhost:8086}
+          uri: lb://review-service
           predicates:
             - Path=/api/reviews/**
         - id: search-service
-          uri: ${SEARCH_SERVICE_URI:http://localhost:8087}
+          uri: lb://search-service
           predicates:
             - Path=/api/search/**
         - id: auth-swagger
-          uri: ${AUTH_SERVICE_URI:http://localhost:8080}
+          uri: lb://auth-service
           predicates:
             - Path=/swagger-ui/**,/v3/api-docs/**
 
@@ -60,6 +60,13 @@ management:
         include: health, info, gateway, prometheus, metrics
 server:
   port: 8000
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URI:http://localhost:8761/eureka}
+  instance:
+    prefer-ip-address: true
 
 logging:
   level:
