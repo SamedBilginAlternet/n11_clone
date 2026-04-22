@@ -14,31 +14,27 @@ scrape_configs:
     docker_sd_configs:
       - host: unix:///var/run/docker.sock
         refresh_interval: 5s
-        filters:
-          # Only scrape containers that are part of our compose project.
-          # compose tags everything with com.docker.compose.project=<dir name>.
-          - name: label
-            values: ["com.docker.compose.project"]
 
     relabel_configs:
-      # Drop /docker/<hash> prefix Docker adds to container names.
+      # Always set a container label from the container name.
       - source_labels: ['__meta_docker_container_name']
         regex: '/(.*)'
         target_label: container
 
-      # Map compose service name so queries can filter by service=auth-service etc.
+      # Try compose v2 label first, fall back to v1.
       - source_labels: ['__meta_docker_container_label_com_docker_compose_service']
         target_label: service
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_service']
+        regex: '^$'
+        source_labels: ['container']
+        target_label: service
 
-      # Ignore infra containers (postgres, rabbit, ES, jaeger, prometheus, grafana,
-      # loki itself, promtail) so the Logs view is about application services.
-      # Comment this block out if you want infra logs too.
-      - source_labels: [service]
-        regex: 'postgres|rabbitmq|elasticsearch|jaeger|prometheus|grafana|loki|promtail|frontend'
+      # Drop infra containers — keep only app services.
+      - source_labels: [container]
+        regex: 'n11-postgres|n11-rabbitmq|n11-elasticsearch|n11-jaeger|n11-prometheus|n11-grafana|n11-loki|n11-promtail|n11-frontend'
         action: drop
 
     pipeline_stages:
-      # Strip Docker JSON log wrapper and extract the plain message.
       - docker: {}
 
       # Spring Boot line shape:
