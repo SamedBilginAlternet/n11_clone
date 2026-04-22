@@ -164,7 +164,7 @@ The `setup-ports.sh` script automatically resolves port conflicts:
 
 ```mermaid
 flowchart TD
-    A["For each service port"] --> B{Is preferred port free?}
+    A["For each service port"] --> B{"Is preferred port free?"}
     B -->|Yes| C["Use preferred port"]
     B -->|No| D["Ask OS for a random free port"]
     D --> C

@@ -152,9 +152,9 @@ Every authenticated service runs `JwtAuthFilter` as a Spring Security filter ins
 
 ```mermaid
 flowchart TD
-    A["Incoming HTTP Request"] --> B{Authorization header present?}
+    A["Incoming HTTP Request"] --> B{"Authorization header present?"}
     B -->|No| C["Continue filter chain\n(unauthenticated)"]
-    B -->|Yes| D{Starts with 'Bearer '?}
+    B -->|Yes| D{"Starts with 'Bearer '?"}
     D -->|No| C
     D -->|Yes| E["Extract token\n(substring after 'Bearer ')"]
     E --> F["Parse JWT + verify signature"]
@@ -162,7 +162,7 @@ flowchart TD
     F -->|MalformedJwtException| G
     F -->|ExpiredJwtException| H["401 Token expired"]
     F -->|Valid| I["Extract username (sub claim)"]
-    I --> J{SecurityContext already has auth?}
+    I --> J{"SecurityContext already has auth?"}
     J -->|Yes| C
     J -->|No| K["Extract roles from 'roles' claim"]
     K --> L["Create UsernamePasswordAuthenticationToken\nwith username + authorities"]
@@ -273,7 +273,7 @@ The `RateLimitFilter` protects authentication endpoints from brute-force attacks
 flowchart TD
     A["Request to /api/auth/*"] --> B["Resolve client IP"]
     B --> C["Lookup or create Bucket for IP"]
-    C --> D{tryConsume(1) succeeds?}
+    C --> D{"tryConsume(1) succeeds?"}
     D -->|Yes| E["Continue to next filter"]
     D -->|No| F["Return 429 Too Many Requests"]
     F --> G["Set Retry-After header"]
