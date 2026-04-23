@@ -5,6 +5,11 @@ spring:
     uris: ${ELASTICSEARCH_URIS:http://localhost:9200}
     connection-timeout: 5s
     socket-timeout: 10s
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
   # Disable DataSource/JPA auto-config (we don't use a relational DB)
   autoconfigure:
     exclude:
