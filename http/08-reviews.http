@@ -1,0 +1,60 @@
+### ═══════════════════════════════════════════════════════════════
+### REVIEW SERVICE — Product reviews
+### ═══════════════════════════════════════════════════════════════
+
+### ── 1. Get reviews for product (public) ────────────────────────
+GET {{host}}/api/reviews/product/1
+
+> {%
+  client.test("returns array", function() {
+    client.assert(Array.isArray(response.body));
+  });
+%}
+
+### ── 2. Get review stats for product (public) ───────────────────
+GET {{host}}/api/reviews/product/1/stats
+
+### ── 3. Create a review (requires auth) ─────────────────────────
+POST {{host}}/api/reviews
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "productId": 5,
+  "rating": 5,
+  "comment": "Harika bir urun, cok memnunum!"
+}
+
+> {%
+  if (response.status === 200 || response.status === 201) {
+    client.global.set("review_id", response.body.id);
+  }
+%}
+
+### ── 4. Duplicate review → rejected ─────────────────────────────
+### Same user, same product → should fail
+POST {{host}}/api/reviews
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "productId": 5,
+  "rating": 3,
+  "comment": "Ikinci yorum denemesi"
+}
+
+> {%
+  client.test("duplicate rejected", function() {
+    client.assert(response.status === 409 || response.status === 400);
+  });
+%}
+
+### ── 5. Delete own review ───────────────────────────────────────
+DELETE {{host}}/api/reviews/{{review_id}}
+Authorization: Bearer {{access_token}}
+
+> {%
+  client.test("deleted", function() {
+    client.assert(response.status === 204);
+  });
+%}

@@ -1,0 +1,45 @@
+### ═══════════════════════════════════════════════════════════════
+### OBSERVABILITY — Health checks, metrics, infrastructure
+### ═══════════════════════════════════════════════════════════════
+
+### ── Gateway health ─────────────────────────────────────────────
+GET {{host}}/actuator/health
+
+### ── Gateway routes ─────────────────────────────────────────────
+GET {{host}}/actuator/gateway/routes
+
+### ── Prometheus metrics (via gateway) ───────────────────────────
+GET {{host}}/actuator/prometheus
+
+### ── Elasticsearch cluster health ───────────────────────────────
+GET http://localhost:19200/_cluster/health?pretty
+
+### ── Elasticsearch product index stats ──────────────────────────
+GET http://localhost:19200/products/_count?pretty
+
+### ── Elasticsearch sample search ────────────────────────────────
+GET http://localhost:19200/products/_search?pretty&q=telefon&size=3
+
+### ── RabbitMQ overview (basic auth) ─────────────────────────────
+GET http://localhost:25672/api/overview
+Authorization: Basic Z3Vlc3Q6Z3Vlc3Q=
+
+### ── RabbitMQ queues ────────────────────────────────────────────
+GET http://localhost:25672/api/queues
+Authorization: Basic Z3Vlc3Q6Z3Vlc3Q=
+
+### ── Redis ping ─────────────────────────────────────────────────
+### (Redis doesn't have HTTP — use redis-cli or check via product cache miss/hit)
+
+### ── Eureka registered instances ────────────────────────────────
+GET http://localhost:18761/eureka/apps
+Accept: application/json
+
+### ── Prometheus targets ─────────────────────────────────────────
+GET http://localhost:19090/api/v1/targets
+
+### ── Loki ready check ───────────────────────────────────────────
+GET http://localhost:13100/ready
+
+### ── Grafana health ─────────────────────────────────────────────
+GET http://localhost:13001/api/health

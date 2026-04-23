@@ -1,0 +1,62 @@
+### ═══════════════════════════════════════════════════════════════
+### SEARCH SERVICE — Elasticsearch faceted search
+### ═══════════════════════════════════════════════════════════════
+
+### ── 1. Full-text search ────────────────────────────────────────
+GET {{host}}/api/search?q=telefon&page=0&size=6
+
+> {%
+  client.test("has results", function() {
+    client.assert(response.body.totalElements >= 0);
+  });
+  client.test("has facets", function() {
+    client.assert(response.body.facets !== undefined);
+    client.assert(response.body.facets.brands !== undefined);
+    client.assert(response.body.facets.categories !== undefined);
+  });
+%}
+
+### ── 2. Fuzzy search (typo tolerance) ──────────────────────────
+### "telefoon" should still match "telefon" via fuzziness: AUTO
+GET {{host}}/api/search?q=telefoon&page=0&size=6
+
+### ── 3. Category filter ─────────────────────────────────────────
+GET {{host}}/api/search?category=elektronik&page=0&size=6
+
+### ── 4. Brand filter ────────────────────────────────────────────
+GET {{host}}/api/search?brand=Apple&page=0&size=6
+
+### ── 5. Price range filter ──────────────────────────────────────
+GET {{host}}/api/search?minPrice=100&maxPrice=500&page=0&size=6
+
+### ── 6. Rating filter ───────────────────────────────────────────
+GET {{host}}/api/search?minRating=4.5&page=0&size=6
+
+### ── 7. Combined filters ────────────────────────────────────────
+GET {{host}}/api/search?q=samsung&category=elektronik&minPrice=1000&sort=price_asc&page=0&size=6
+
+### ── 8. Sort by price descending ────────────────────────────────
+GET {{host}}/api/search?sort=price_desc&page=0&size=6
+
+### ── 9. Sort by rating ──────────────────────────────────────────
+GET {{host}}/api/search?sort=rating_desc&page=0&size=6
+
+### ── 10. Manual reindex ─────────────────────────────────────────
+### Pulls all products from product-service and bulk indexes into ES
+POST {{host}}/api/search/reindex
+
+> {%
+  client.test("returns indexed count", function() {
+    client.assert(response.body.indexed !== undefined);
+  });
+  client.log("Indexed " + response.body.indexed + " products");
+%}
+
+### ── 11. Empty search (returns all) ─────────────────────────────
+GET {{host}}/api/search?page=0&size=6
+
+> {%
+  client.test("returns products", function() {
+    client.assert(response.body.content.length > 0);
+  });
+%}

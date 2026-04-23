@@ -1,0 +1,86 @@
+### ═══════════════════════════════════════════════════════════════
+### CHECKOUT SAGA — Payment Failure (compensation path)
+### ═══════════════════════════════════════════════════════════════
+### Login as failuser@n11demo.com — email contains "fail" so
+### payment-service always rejects it.
+###
+### Saga flow:
+###   order.created → inventory.reserve → payment.FAILED
+###   → order.cancelled → inventory.release + notification(CANCELLED)
+###
+### The compensation path:
+###   1. Inventory was reserved (stock decremented)
+###   2. Payment fails (email contains "fail")
+###   3. Order marked CANCELLED
+###   4. inventory-service releases reserved stock (rollback)
+###   5. notification-service creates ORDER_CANCELLED notification
+
+### ── 1. Login as fail user ──────────────────────────────────────
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "failuser@n11demo.com",
+  "password": "User123!"
+}
+
+> {%
+  client.global.set("fail_token", response.body.accessToken);
+%}
+
+### ── 2. Checkout with fail user ─────────────────────────────────
+### Payment will be REJECTED because email contains "fail"
+POST {{host}}/api/orders/checkout
+Content-Type: application/json
+Authorization: Bearer {{fail_token}}
+
+{
+  "address": "Istanbul, Besiktas",
+  "items": [
+    {
+      "productId": 3,
+      "productName": "Test Product",
+      "productPrice": 499.00,
+      "quantity": 1
+    }
+  ]
+}
+
+> {%
+  client.global.set("fail_order_id", response.body.id);
+  client.log("Fail order ID: " + response.body.id + " — saga compensation running...");
+%}
+
+### ── 3. Poll order (wait 3-5s) → should be CANCELLED ───────────
+GET {{host}}/api/orders/{{fail_order_id}}
+Authorization: Bearer {{fail_token}}
+
+> {%
+  client.log("Order status: " + response.body.status);
+  // Should be CANCELLED after saga compensation
+  client.test("order is CANCELLED", function() {
+    client.assert(response.body.status === "CANCELLED");
+  });
+%}
+
+### ── 4. Check payment was FAILED ────────────────────────────────
+GET {{host}}/api/payments/order/{{fail_order_id}}
+Authorization: Bearer {{fail_token}}
+
+> {%
+  client.log("Payment: " + response.body.status + " — " + response.body.failureReason);
+%}
+
+### ── 5. Check notification → ORDER_CANCELLED ────────────────────
+GET {{host}}/api/notifications
+Authorization: Bearer {{fail_token}}
+
+> {%
+  var cancelled = response.body.find(function(n) { return n.type === "ORDER_CANCELLED"; });
+  if (cancelled) {
+    client.log("Cancel notification: " + cancelled.message);
+  }
+  client.test("has cancellation notification", function() {
+    client.assert(cancelled !== undefined);
+  });
+%}

@@ -1,0 +1,162 @@
+### ═══════════════════════════════════════════════════════════════
+### PRODUCT SERVICE — Browse, CRUD, Event Publishing
+### ═══════════════════════════════════════════════════════════════
+### Prerequisites: Run 01-auth.http login first to get access_token
+
+### ── 1. List products (paginated) ───────────────────────────────
+GET {{host}}/api/products?page=0&size=6
+
+> {%
+  client.test("status is 200", function() {
+    client.assert(response.status === 200);
+  });
+  client.test("has content array", function() {
+    client.assert(Array.isArray(response.body.content));
+  });
+  client.test("has totalElements", function() {
+    client.assert(response.body.totalElements > 0);
+  });
+  // Save first product ID for later tests
+  if (response.body.content.length > 0) {
+    client.global.set("product_id", response.body.content[0].id);
+    client.global.set("product_slug", response.body.content[0].slug);
+  }
+%}
+
+### ── 2. List by category ────────────────────────────────────────
+GET {{host}}/api/products?category=elektronik&page=0&size=6
+
+> {%
+  client.test("all products are elektronik", function() {
+    response.body.content.forEach(function(p) {
+      client.assert(p.category === "elektronik");
+    });
+  });
+%}
+
+### ── 3. Search by name (q parameter) ───────────────────────────
+GET {{host}}/api/products?q=iphone&page=0&size=6
+
+### ── 4. Get product by ID ───────────────────────────────────────
+GET {{host}}/api/products/{{product_id}}
+
+> {%
+  client.test("status is 200", function() {
+    client.assert(response.status === 200);
+  });
+  client.test("has discountedPrice", function() {
+    client.assert(response.body.discountedPrice !== undefined);
+  });
+%}
+
+### ── 5. Get product by slug ─────────────────────────────────────
+GET {{host}}/api/products/slug/{{product_slug}}
+
+> {%
+  client.test("status is 200", function() {
+    client.assert(response.status === 200);
+  });
+%}
+
+### ── 6. Get all categories ──────────────────────────────────────
+GET {{host}}/api/products/categories
+
+> {%
+  client.test("8 categories", function() {
+    client.assert(response.body.length === 8);
+  });
+%}
+
+### ── 7. Get non-existent product → 404 ──────────────────────────
+GET {{host}}/api/products/999999
+
+> {%
+  client.test("status is 404", function() {
+    client.assert(response.status === 404);
+  });
+%}
+
+### ═══════════════════════════════════════════════════════════════
+### CRUD — These publish events to RabbitMQ → search-service syncs ES
+### ═══════════════════════════════════════════════════════════════
+
+### ── 8. Create a product ────────────────────────────────────────
+### Event: product.created → search-service indexes in ES
+POST {{host}}/api/products
+Content-Type: application/json
+Authorization: Bearer {{admin_token}}
+
+{
+  "name": "Test Urun HTTP Client",
+  "category": "elektronik",
+  "brand": "TestBrand",
+  "description": "Bu urun .http dosyasindan olusturuldu",
+  "price": 299.99,
+  "discountPercentage": 10,
+  "stockQuantity": 50,
+  "imageUrl": "https://picsum.photos/seed/test/400/400"
+}
+
+> {%
+  client.test("status is 201", function() {
+    client.assert(response.status === 201);
+  });
+  client.global.set("new_product_id", response.body.id);
+  client.log("Created product ID: " + response.body.id);
+%}
+
+### ── 9. Verify product appears in ES (wait 2s for event) ────────
+### Event should have propagated: product.created → RabbitMQ → search-service → ES
+GET {{host}}/api/search?q=Test%20Urun%20HTTP%20Client
+
+> {%
+  client.test("product found in search", function() {
+    client.assert(response.body.totalElements >= 1);
+  });
+%}
+
+### ── 10. Update the product ─────────────────────────────────────
+### Event: product.updated → search-service re-indexes in ES
+PUT {{host}}/api/products/{{new_product_id}}
+Content-Type: application/json
+Authorization: Bearer {{admin_token}}
+
+{
+  "name": "Test Urun GUNCELLENDI",
+  "price": 199.99
+}
+
+> {%
+  client.test("status is 200", function() {
+    client.assert(response.status === 200);
+  });
+  client.test("name updated", function() {
+    client.assert(response.body.name === "Test Urun GUNCELLENDI");
+  });
+  client.test("price updated", function() {
+    client.assert(response.body.price === 199.99);
+  });
+%}
+
+### ── 11. Verify update in ES ────────────────────────────────────
+GET {{host}}/api/search?q=GUNCELLENDI
+
+### ── 12. Delete the product ─────────────────────────────────────
+### Event: product.deleted → search-service removes from ES
+DELETE {{host}}/api/products/{{new_product_id}}
+Authorization: Bearer {{admin_token}}
+
+> {%
+  client.test("status is 204", function() {
+    client.assert(response.status === 204);
+  });
+%}
+
+### ── 13. Verify deleted from ES ─────────────────────────────────
+GET {{host}}/api/search?q=GUNCELLENDI
+
+> {%
+  client.test("product removed from search", function() {
+    client.assert(response.body.totalElements === 0);
+  });
+%}

@@ -1,0 +1,180 @@
+### ═══════════════════════════════════════════════════════════════
+### AUTH SERVICE — Register, Login, Refresh, Logout, Me, Admin
+### ═══════════════════════════════════════════════════════════════
+### Run these in order. Each "###" block is a separate request.
+### Access token is captured from login response for subsequent requests.
+
+### ── 1. Register a new user ─────────────────────────────────────
+### Expected: 201 Created + accessToken in body + refresh_token cookie
+POST {{host}}/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "testuser@example.com",
+  "password": "Test1234!",
+  "fullName": "Test Kullanici"
+}
+
+> {%
+  client.global.set("access_token", response.body.accessToken);
+  client.test("status is 201", function() {
+    client.assert(response.status === 201);
+  });
+  client.test("accessToken present", function() {
+    client.assert(response.body.accessToken !== undefined);
+  });
+  client.test("refreshToken NOT in body (HttpOnly cookie)", function() {
+    client.assert(response.body.refreshToken === undefined);
+  });
+%}
+
+### ── 2. Register duplicate → 409 ───────────────────────────────
+### Expected: 409 Conflict, problem+json
+POST {{host}}/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "testuser@example.com",
+  "password": "Test1234!",
+  "fullName": "Test Kullanici"
+}
+
+> {%
+  client.test("status is 409", function() {
+    client.assert(response.status === 409);
+  });
+%}
+
+### ── 3. Register with weak password → 400 ──────────────────────
+### Expected: 400 with fields.password
+POST {{host}}/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "weak@example.com",
+  "password": "weak",
+  "fullName": "Weak Pass"
+}
+
+> {%
+  client.test("status is 400", function() {
+    client.assert(response.status === 400);
+  });
+  client.test("password field error present", function() {
+    client.assert(response.body.fields.password !== undefined);
+  });
+%}
+
+### ── 4. Login with demo user ────────────────────────────────────
+### Expected: 200 + accessToken + refresh_token cookie set
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{user_email}}",
+  "password": "{{user_pass}}"
+}
+
+> {%
+  client.global.set("access_token", response.body.accessToken);
+  client.test("status is 200", function() {
+    client.assert(response.status === 200);
+  });
+  client.test("accessToken present", function() {
+    client.assert(response.body.accessToken !== undefined);
+  });
+%}
+
+### ── 5. Login with wrong password → 401 ────────────────────────
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{user_email}}",
+  "password": "WrongPassword1!"
+}
+
+> {%
+  client.test("status is 401", function() {
+    client.assert(response.status === 401);
+  });
+%}
+
+### ── 6. Get current user profile ────────────────────────────────
+### Expected: 200 with email, fullName, roles
+GET {{host}}/api/users/me
+Authorization: Bearer {{access_token}}
+
+> {%
+  client.test("status is 200", function() {
+    client.assert(response.status === 200);
+  });
+  client.test("has email", function() {
+    client.assert(response.body.email !== undefined);
+  });
+  client.test("has roles", function() {
+    client.assert(response.body.roles !== undefined);
+  });
+%}
+
+### ── 7. Access /me without token → 401 ─────────────────────────
+GET {{host}}/api/users/me
+
+> {%
+  client.test("status is 401", function() {
+    client.assert(response.status === 401);
+  });
+%}
+
+### ── 8. Admin login ─────────────────────────────────────────────
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{admin_email}}",
+  "password": "{{admin_pass}}"
+}
+
+> {%
+  client.global.set("admin_token", response.body.accessToken);
+%}
+
+### ── 9. Admin endpoint with ADMIN role → 200 ───────────────────
+GET {{host}}/api/users/admin
+Authorization: Bearer {{admin_token}}
+
+> {%
+  client.test("status is 200", function() {
+    client.assert(response.status === 200);
+  });
+%}
+
+### ── 10. Admin endpoint with USER role → 403 ───────────────────
+GET {{host}}/api/users/admin
+Authorization: Bearer {{access_token}}
+
+> {%
+  client.test("status is 403", function() {
+    client.assert(response.status === 403);
+  });
+%}
+
+### ── 11. Refresh token (cookie sent automatically) ──────────────
+### Expected: 200 + new accessToken + new refresh_token cookie
+POST {{host}}/api/auth/refresh
+
+> {%
+  if (response.status === 200) {
+    client.global.set("access_token", response.body.accessToken);
+  }
+%}
+
+### ── 12. Logout (clears refresh cookie) ─────────────────────────
+### Expected: 204 No Content
+POST {{host}}/api/auth/logout
+
+> {%
+  client.test("status is 204", function() {
+    client.assert(response.status === 204);
+  });
+%}

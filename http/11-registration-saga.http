@@ -1,0 +1,57 @@
+### ═══════════════════════════════════════════════════════════════
+### REGISTRATION SAGA — Auto basket creation
+### ═══════════════════════════════════════════════════════════════
+### When a user registers:
+###   auth.register → publish "user.registered"
+###   → basket-service creates empty basket
+###   → notification-service creates WELCOME notification
+###
+### If basket creation fails:
+###   basket publishes "basket.creation.failed"
+###   → auth-service deletes the user (compensation)
+
+### ── 1. Register a brand new user ───────────────────────────────
+POST {{host}}/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "saga-test-{{$timestamp}}@example.com",
+  "password": "SagaTest1!",
+  "fullName": "Saga Test User"
+}
+
+> {%
+  client.global.set("saga_token", response.body.accessToken);
+  client.test("registered", function() {
+    client.assert(response.status === 201);
+  });
+%}
+
+### ── 2. Check basket was auto-created (wait 2s) ────────────────
+### Saga: user.registered → basket-service → empty basket
+GET {{host}}/api/basket
+Authorization: Bearer {{saga_token}}
+
+> {%
+  client.test("basket exists", function() {
+    client.assert(response.status === 200);
+  });
+  client.test("basket is empty", function() {
+    client.assert(response.body.itemCount === 0);
+  });
+%}
+
+### ── 3. Check WELCOME notification ──────────────────────────────
+### Saga: user.registered → notification-service → WELCOME
+GET {{host}}/api/notifications
+Authorization: Bearer {{saga_token}}
+
+> {%
+  var welcome = response.body.find(function(n) { return n.type === "WELCOME"; });
+  client.test("welcome notification received", function() {
+    client.assert(welcome !== undefined);
+  });
+  if (welcome) {
+    client.log("Welcome: " + welcome.message);
+  }
+%}

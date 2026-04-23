@@ -1,0 +1,105 @@
+### ═══════════════════════════════════════════════════════════════
+### BASKET SERVICE — Add, update, remove items
+### ═══════════════════════════════════════════════════════════════
+### Prerequisites: Login as user first (01-auth.http → request 4)
+
+### ── 1. Get basket (initially empty or auto-created by saga) ────
+GET {{host}}/api/basket
+Authorization: Bearer {{access_token}}
+
+> {%
+  client.test("status is 200", function() {
+    client.assert(response.status === 200);
+  });
+%}
+
+### ── 2. Add first item to basket ────────────────────────────────
+POST {{host}}/api/basket/items
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "productId": 1,
+  "productName": "iPhone 15 Pro Max",
+  "productPrice": 79999.00,
+  "quantity": 1
+}
+
+> {%
+  client.test("status is 200", function() {
+    client.assert(response.status === 200);
+  });
+  client.test("has 1 item", function() {
+    client.assert(response.body.items.length >= 1);
+  });
+  // Save item ID for update/delete
+  if (response.body.items.length > 0) {
+    client.global.set("basket_item_id", response.body.items[0].id);
+  }
+%}
+
+### ── 3. Add same product again → quantity merges ────────────────
+POST {{host}}/api/basket/items
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "productId": 1,
+  "productName": "iPhone 15 Pro Max",
+  "productPrice": 79999.00,
+  "quantity": 2
+}
+
+> {%
+  client.test("quantity merged to 3", function() {
+    var item = response.body.items.find(function(i) { return i.productId === 1; });
+    client.assert(item.quantity === 3);
+  });
+%}
+
+### ── 4. Add a different product ─────────────────────────────────
+POST {{host}}/api/basket/items
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "productId": 2,
+  "productName": "Samsung Galaxy S24",
+  "productPrice": 54999.00,
+  "quantity": 1
+}
+
+> {%
+  client.test("now has 2 different items", function() {
+    client.assert(response.body.items.length === 2);
+  });
+%}
+
+### ── 5. Update item quantity ────────────────────────────────────
+PUT {{host}}/api/basket/items/{{basket_item_id}}
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "quantity": 1
+}
+
+> {%
+  client.test("quantity updated", function() {
+    client.assert(response.status === 200);
+  });
+%}
+
+### ── 6. Remove item from basket ─────────────────────────────────
+DELETE {{host}}/api/basket/items/{{basket_item_id}}
+Authorization: Bearer {{access_token}}
+
+> {%
+  client.test("item removed", function() {
+    client.assert(response.status === 200);
+  });
+%}
+
+### ── 7. View final basket ───────────────────────────────────────
+GET {{host}}/api/basket
+Authorization: Bearer {{access_token}}

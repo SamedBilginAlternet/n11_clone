@@ -1,0 +1,57 @@
+### ═══════════════════════════════════════════════════════════════
+### CHECKOUT SAGA — Amount Limit Exceeded (>100.000 TRY)
+### ═══════════════════════════════════════════════════════════════
+### Login as normal user but checkout with amount > 100.000 TRY
+### Payment-service rejects amounts over the limit.
+###
+### Same compensation flow as payment failure:
+###   order.created → inventory.reserve → payment.FAILED (limit)
+###   → order.cancelled → inventory.release + notification
+
+### ── 1. Login ───────────────────────────────────────────────────
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "user@n11demo.com",
+  "password": "User123!"
+}
+
+> {%
+  client.global.set("access_token", response.body.accessToken);
+%}
+
+### ── 2. Checkout with huge amount → triggers limit rejection ────
+POST {{host}}/api/orders/checkout
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "address": "Istanbul, Sisli",
+  "items": [
+    {
+      "productId": 1,
+      "productName": "iPhone 15 Pro Max",
+      "productPrice": 79999.00,
+      "quantity": 2
+    }
+  ]
+}
+
+> {%
+  client.global.set("limit_order_id", response.body.id);
+  client.log("Limit order ID: " + response.body.id + " — total: 159998 TRY (>100K limit)");
+%}
+
+### ── 3. Poll order → should be CANCELLED with limit reason ──────
+GET {{host}}/api/orders/{{limit_order_id}}
+Authorization: Bearer {{access_token}}
+
+> {%
+  client.log("Order status: " + response.body.status);
+  client.log("Failure reason: " + response.body.failureReason);
+%}
+
+### ── 4. Check payment → FAILED with "Limit asildi" ─────────────
+GET {{host}}/api/payments/order/{{limit_order_id}}
+Authorization: Bearer {{access_token}}

@@ -1,0 +1,18 @@
+### ═══════════════════════════════════════════════════════════════
+### Shared variables — run this file first or set in http-client.env.json
+### ═══════════════════════════════════════════════════════════════
+
+### IntelliJ / VS Code REST Client can use these as environment variables.
+### Create http-client.env.json next to this file:
+###
+### {
+###   "dev": {
+###     "host": "http://localhost:18000",
+###     "admin_email": "admin@n11demo.com",
+###     "admin_pass": "Admin123!",
+###     "user_email": "user@n11demo.com",
+###     "user_pass": "User123!",
+###     "fail_email": "failuser@n11demo.com",
+###     "fail_pass": "User123!"
+###   }
+### }

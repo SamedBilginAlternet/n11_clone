@@ -1,0 +1,19 @@
+### ═══════════════════════════════════════════════════════════════
+### INVENTORY SERVICE — Stock levels
+### ═══════════════════════════════════════════════════════════════
+
+### ── 1. Get all inventory items ─────────────────────────────────
+GET {{host}}/api/inventory
+Authorization: Bearer {{access_token}}
+
+### ── 2. Get inventory for specific product ──────────────────────
+GET {{host}}/api/inventory/1
+Authorization: Bearer {{access_token}}
+
+> {%
+  client.test("has stock info", function() {
+    client.assert(response.body.availableStock !== undefined);
+    client.assert(response.body.reservedStock !== undefined);
+  });
+  client.log("Available: " + response.body.availableStock + ", Reserved: " + response.body.reservedStock);
+%}

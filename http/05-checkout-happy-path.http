@@ -1,0 +1,131 @@
+### ═══════════════════════════════════════════════════════════════
+### CHECKOUT SAGA — Happy Path (payment succeeds)
+### ═══════════════════════════════════════════════════════════════
+### Login as user@n11demo.com (happy path — payment always succeeds)
+###
+### Saga flow:
+###   order.created → inventory.reserve → payment.succeeded
+###   → order.confirmed → basket.clear + notification.save
+###
+### After running, check:
+###   - Jaeger UI (http://localhost:26686): order-service trace shows full saga
+###   - RabbitMQ (http://localhost:25672): message counts on saga queues
+###   - Grafana Loki: {container="n11-order"} shows checkout logs
+
+### ── 1. Login as happy-path user ────────────────────────────────
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "user@n11demo.com",
+  "password": "User123!"
+}
+
+> {%
+  client.global.set("access_token", response.body.accessToken);
+%}
+
+### ── 2. Add items to basket ─────────────────────────────────────
+POST {{host}}/api/basket/items
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "productId": 1,
+  "productName": "iPhone 15 Pro Max",
+  "productPrice": 79999.00,
+  "quantity": 1
+}
+
+### ── 3. Checkout → triggers full saga ───────────────────────────
+### Expected: 200/202 with order status=PENDING
+POST {{host}}/api/orders/checkout
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "address": "Istanbul, Kadikoy, Moda Cad. No:42",
+  "items": [
+    {
+      "productId": 1,
+      "productName": "iPhone 15 Pro Max",
+      "productPrice": 79999.00,
+      "quantity": 1
+    }
+  ]
+}
+
+> {%
+  client.test("order created", function() {
+    client.assert(response.status === 200 || response.status === 201 || response.status === 202);
+  });
+  client.test("status is PENDING", function() {
+    client.assert(response.body.status === "PENDING");
+  });
+  client.global.set("order_id", response.body.id);
+  client.log("Order ID: " + response.body.id + " — saga is running...");
+%}
+
+### ── 4. Poll order status (wait 3-5 seconds for saga) ──────────
+### Expected: status changes from PENDING → PAID
+GET {{host}}/api/orders/{{order_id}}
+Authorization: Bearer {{access_token}}
+
+> {%
+  client.test("order exists", function() {
+    client.assert(response.status === 200);
+  });
+  client.log("Order status: " + response.body.status);
+  // After saga completes, this should be PAID
+%}
+
+### ── 5. List all orders ─────────────────────────────────────────
+GET {{host}}/api/orders
+Authorization: Bearer {{access_token}}
+
+> {%
+  client.test("has orders", function() {
+    client.assert(response.body.length >= 1);
+  });
+%}
+
+### ── 6. Check payment was recorded ──────────────────────────────
+GET {{host}}/api/payments/order/{{order_id}}
+Authorization: Bearer {{access_token}}
+
+> {%
+  client.log("Payment status: " + response.body.status);
+%}
+
+### ── 7. Check notifications (saga fan-out) ──────────────────────
+### Expected: ORDER_CONFIRMED notification
+GET {{host}}/api/notifications
+Authorization: Bearer {{access_token}}
+
+> {%
+  client.test("has notifications", function() {
+    client.assert(response.body.length >= 1);
+  });
+  var confirmed = response.body.find(function(n) { return n.type === "ORDER_CONFIRMED"; });
+  if (confirmed) {
+    client.log("Notification: " + confirmed.message);
+  }
+%}
+
+### ── 8. Check unread notification count ─────────────────────────
+GET {{host}}/api/notifications/unread-count
+Authorization: Bearer {{access_token}}
+
+### ── 9. Check basket was cleared by saga ────────────────────────
+GET {{host}}/api/basket
+Authorization: Bearer {{access_token}}
+
+> {%
+  client.test("basket is empty after checkout", function() {
+    client.assert(response.body.itemCount === 0);
+  });
+%}
+
+### ── 10. Check inventory was decremented ────────────────────────
+GET {{host}}/api/inventory/1
+Authorization: Bearer {{access_token}}

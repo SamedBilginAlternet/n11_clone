@@ -1,0 +1,34 @@
+### ═══════════════════════════════════════════════════════════════
+### NOTIFICATION SERVICE — List, read, delete
+### ═══════════════════════════════════════════════════════════════
+
+### ── 1. Get all notifications ───────────────────────────────────
+GET {{host}}/api/notifications
+Authorization: Bearer {{access_token}}
+
+> {%
+  client.test("returns array", function() {
+    client.assert(Array.isArray(response.body));
+  });
+  if (response.body.length > 0) {
+    client.global.set("notification_id", response.body[0].id);
+  }
+%}
+
+### ── 2. Get unread count ────────────────────────────────────────
+GET {{host}}/api/notifications/unread-count
+Authorization: Bearer {{access_token}}
+
+> {%
+  client.test("has count field", function() {
+    client.assert(response.body.count !== undefined);
+  });
+%}
+
+### ── 3. Mark notification as read ───────────────────────────────
+PATCH {{host}}/api/notifications/{{notification_id}}/read
+Authorization: Bearer {{access_token}}
+
+### ── 4. Delete notification ─────────────────────────────────────
+DELETE {{host}}/api/notifications/{{notification_id}}
+Authorization: Bearer {{access_token}}
