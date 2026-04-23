@@ -1,3 +1,11 @@
+@host = http://localhost:18000
+@admin_email = admin@n11demo.com
+@admin_pass = Admin123!
+@user_email = user@n11demo.com
+@user_pass = User123!
+@fail_email = failuser@n11demo.com
+@fail_pass = User123!
+
 ### ═══════════════════════════════════════════════════════════════
 ### CHECKOUT SAGA — Payment Failure (compensation path)
 ### ═══════════════════════════════════════════════════════════════
