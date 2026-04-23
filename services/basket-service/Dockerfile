@@ -4,12 +4,12 @@
 FROM maven:3.9-eclipse-temurin-21 AS deps
 WORKDIR /build
 COPY pom.xml .
-RUN mvn -B -q dependency:go-offline
+RUN --mount=type=cache,target=/root/.m2/repository mvn -B -q dependency:go-offline
 
 # --- builder: package jar
 FROM deps AS builder
 COPY src ./src
-RUN mvn -B -q -DskipTests package
+RUN --mount=type=cache,target=/root/.m2/repository mvn -B -q -DskipTests package
 
 # --- runtime: small non-root image
 FROM eclipse-temurin:21-jre-alpine AS runtime
