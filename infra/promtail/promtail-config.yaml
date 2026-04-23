@@ -25,10 +25,19 @@ scrape_configs:
       - source_labels: ['__meta_docker_container_label_com_docker_compose_service']
         target_label: service
 
+      # Drop containers without a service label (non-compose containers).
+      - source_labels: [service]
+        regex: '^$'
+        action: drop
+
       # Drop infra containers — keep only app services.
       - source_labels: [container]
-        regex: 'n11-postgres|n11-rabbitmq|n11-elasticsearch|n11-jaeger|n11-prometheus|n11-grafana|n11-loki|n11-promtail|n11-frontend'
+        regex: 'n11-postgres|n11-rabbitmq|n11-redis|n11-elasticsearch|n11-jaeger|n11-prometheus|n11-grafana|n11-loki|n11-promtail|n11-eureka|n11-frontend'
         action: drop
+
+      # Set job label so every stream has at least one non-empty label.
+      - target_label: job
+        replacement: n11-services
 
     pipeline_stages:
       - docker: {}
