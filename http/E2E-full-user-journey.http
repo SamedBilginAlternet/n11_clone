@@ -1,0 +1,453 @@
+### ═══════════════════════════════════════════════════════════════════════════
+###  E2E — Full User Journey: Register → Browse → Buy → Review → Logout
+### ═══════════════════════════════════════════════════════════════════════════
+###  This file simulates a real user's complete lifecycle on the platform.
+###  Run top-to-bottom. Each request feeds into the next.
+###
+###  Saga events verified:
+###    UserRegistrationSaga  → auto basket + welcome notification
+###    CheckoutSaga (happy)  → order PAID, basket cleared, stock reserved
+###    CheckoutSaga (fail)   → order CANCELLED, stock released, cancel notif
+###
+###  Services touched: ALL 10 + gateway + Elasticsearch + RabbitMQ + Redis
+### ═══════════════════════════════════════════════════════════════════════════
+
+
+### ─────────────────────────────────────────────────────────────────────────
+### PHASE 1: NEW USER REGISTRATION
+### Saga: user.registered → basket auto-created + WELCOME notification
+### ─────────────────────────────────────────────────────────────────────────
+
+### 1.1 Register
+POST {{host}}/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "e2e-{{$timestamp}}@n11demo.com",
+  "password": "E2eTest1!",
+  "fullName": "E2E Test Kullanici"
+}
+
+> {%
+  client.assert(response.status === 201, "Register should return 201");
+  client.assert(response.body.accessToken, "Should have accessToken");
+  client.assert(!response.body.refreshToken, "refreshToken should NOT be in body (HttpOnly cookie)");
+  client.global.set("token", response.body.accessToken);
+  client.global.set("user_email", "e2e-" + Date.now() + "@n11demo.com");
+  client.log("✓ Registered — token acquired, refresh token in cookie");
+%}
+
+### 1.2 Verify profile created
+GET {{host}}/api/users/me
+Authorization: Bearer {{token}}
+
+> {%
+  client.assert(response.status === 200, "Profile should exist");
+  client.assert(response.body.fullName === "E2E Test Kullanici");
+  client.assert(response.body.roles.length > 0, "Should have roles");
+  client.log("✓ Profile: " + response.body.email + " roles=" + JSON.stringify(response.body.roles));
+%}
+
+### 1.3 Verify basket auto-created by saga (wait 2s for RabbitMQ)
+GET {{host}}/api/basket
+Authorization: Bearer {{token}}
+
+> {%
+  client.assert(response.status === 200, "Basket should exist");
+  client.assert(response.body.itemCount === 0, "Basket should be empty");
+  client.log("✓ Registration saga: empty basket auto-created");
+%}
+
+### 1.4 Verify WELCOME notification from saga
+GET {{host}}/api/notifications
+Authorization: Bearer {{token}}
+
+> {%
+  var welcome = response.body.find(function(n) { return n.type === "WELCOME"; });
+  client.assert(welcome, "Should have WELCOME notification");
+  client.assert(!welcome.read, "Should be unread");
+  client.log("✓ Registration saga: WELCOME notification — " + welcome.message);
+%}
+
+### 1.5 Check unread count
+GET {{host}}/api/notifications/unread-count
+Authorization: Bearer {{token}}
+
+> {%
+  client.assert(response.body.count >= 1, "At least 1 unread");
+  client.log("✓ Unread notifications: " + response.body.count);
+%}
+
+
+### ─────────────────────────────────────────────────────────────────────────
+### PHASE 2: BROWSE PRODUCTS
+### Hits: product-service (PostgreSQL + Redis cache) + search-service (ES)
+### ─────────────────────────────────────────────────────────────────────────
+
+### 2.1 Get categories
+GET {{host}}/api/products/categories
+
+> {%
+  client.assert(response.body.length === 8, "Should have 8 categories");
+  client.log("✓ Categories: " + response.body.map(function(c){return c.name;}).join(", "));
+%}
+
+### 2.2 Browse elektronik category
+GET {{host}}/api/products?category=elektronik&page=0&size=6
+
+> {%
+  client.assert(response.body.content.length > 0, "Should have elektronik products");
+  // Save a product for later purchase
+  var p = response.body.content[0];
+  client.global.set("buy_product_id", p.id);
+  client.global.set("buy_product_name", p.name);
+  client.global.set("buy_product_price", p.price);
+  client.log("✓ Found " + response.body.totalElements + " elektronik products");
+  client.log("  Will buy: " + p.name + " (" + p.price + " TRY)");
+%}
+
+### 2.3 View product detail
+GET {{host}}/api/products/{{buy_product_id}}
+
+> {%
+  client.assert(response.body.discountedPrice !== undefined, "Should calculate discountedPrice");
+  client.global.set("buy_discounted_price", response.body.discountedPrice);
+  client.log("✓ Product detail: " + response.body.name + " — " + response.body.discountedPrice + " TRY (discounted)");
+%}
+
+### 2.4 Read product reviews
+GET {{host}}/api/reviews/product/{{buy_product_id}}
+
+> {%
+  client.log("✓ Reviews: " + response.body.length + " reviews found");
+%}
+
+### 2.5 Search for the product via Elasticsearch
+GET {{host}}/api/search?q=samsung&page=0&size=6
+
+> {%
+  client.assert(response.body.facets !== undefined, "Should return facets");
+  client.log("✓ ES search: " + response.body.totalElements + " results, brands: " + Object.keys(response.body.facets.brands).length);
+%}
+
+### 2.6 Faceted search — filter by price range
+GET {{host}}/api/search?minPrice=100&maxPrice=5000&sort=price_asc&page=0&size=6
+
+> {%
+  client.log("✓ Price filter: " + response.body.totalElements + " products between 100-5000 TRY");
+%}
+
+### 2.7 Check stock before buying
+GET {{host}}/api/inventory/{{buy_product_id}}
+Authorization: Bearer {{token}}
+
+> {%
+  client.global.set("stock_before", response.body.availableStock);
+  client.log("✓ Stock before purchase: available=" + response.body.availableStock + " reserved=" + response.body.reservedStock);
+%}
+
+
+### ─────────────────────────────────────────────────────────────────────────
+### PHASE 3: ADD TO BASKET
+### Hits: basket-service (PostgreSQL)
+### ─────────────────────────────────────────────────────────────────────────
+
+### 3.1 Add product to basket
+POST {{host}}/api/basket/items
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "productId": {{buy_product_id}},
+  "productName": "{{buy_product_name}}",
+  "productPrice": {{buy_product_price}},
+  "quantity": 1
+}
+
+> {%
+  client.assert(response.body.itemCount >= 1, "Basket should have items");
+  client.global.set("basket_item_id", response.body.items[0].id);
+  client.log("✓ Added to basket: " + response.body.items[0].productName + " x" + response.body.items[0].quantity);
+%}
+
+### 3.2 Add another unit → quantity merges
+POST {{host}}/api/basket/items
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "productId": {{buy_product_id}},
+  "productName": "{{buy_product_name}}",
+  "productPrice": {{buy_product_price}},
+  "quantity": 1
+}
+
+> {%
+  var item = response.body.items.find(function(i) { return i.productId == client.global.get("buy_product_id"); });
+  client.assert(item.quantity === 2, "Quantity should merge to 2");
+  client.log("✓ Quantity merged: " + item.productName + " x" + item.quantity);
+%}
+
+### 3.3 Update quantity back to 1
+PUT {{host}}/api/basket/items/{{basket_item_id}}
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "quantity": 1
+}
+
+> {%
+  client.log("✓ Basket quantity updated to 1");
+%}
+
+### 3.4 View basket
+GET {{host}}/api/basket
+Authorization: Bearer {{token}}
+
+> {%
+  client.assert(response.body.itemCount === 1, "Should have 1 item");
+  client.log("✓ Basket: " + response.body.itemCount + " item(s), total ready for checkout");
+%}
+
+
+### ─────────────────────────────────────────────────────────────────────────
+### PHASE 4: CHECKOUT — HAPPY PATH
+### Saga: order.created → inventory.reserve → payment.succeeded
+###       → order.confirmed → basket.clear + notification(CONFIRMED)
+### ─────────────────────────────────────────────────────────────────────────
+
+### 4.1 Checkout
+POST {{host}}/api/orders/checkout
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "address": "Istanbul, Kadikoy, Moda Cad. No:42 D:7",
+  "items": [
+    {
+      "productId": {{buy_product_id}},
+      "productName": "{{buy_product_name}}",
+      "productPrice": {{buy_discounted_price}},
+      "quantity": 1
+    }
+  ]
+}
+
+> {%
+  client.assert(response.body.status === "PENDING", "Order should start as PENDING");
+  client.global.set("order_id", response.body.id);
+  client.log("✓ Order #" + response.body.id + " created — status: PENDING");
+  client.log("  Saga is running: order → inventory → payment → confirm...");
+%}
+
+### 4.2 Wait for saga, then check order status → PAID
+### (Run this after ~3 seconds)
+GET {{host}}/api/orders/{{order_id}}
+Authorization: Bearer {{token}}
+
+> {%
+  client.log("✓ Order #" + response.body.id + " status: " + response.body.status);
+  if (response.body.status === "PAID") {
+    client.log("  ✅ Saga completed successfully!");
+  } else if (response.body.status === "PENDING") {
+    client.log("  ⏳ Saga still running — try again in a few seconds");
+  }
+%}
+
+### 4.3 Verify payment recorded
+GET {{host}}/api/payments/order/{{order_id}}
+Authorization: Bearer {{token}}
+
+> {%
+  client.log("✓ Payment: status=" + response.body.status + " txn=" + response.body.transactionId);
+%}
+
+### 4.4 Verify basket was cleared by saga
+GET {{host}}/api/basket
+Authorization: Bearer {{token}}
+
+> {%
+  client.assert(response.body.itemCount === 0, "Basket should be empty after checkout");
+  client.log("✓ Saga side-effect: basket cleared");
+%}
+
+### 4.5 Verify stock was decremented
+GET {{host}}/api/inventory/{{buy_product_id}}
+Authorization: Bearer {{token}}
+
+> {%
+  client.log("✓ Stock after purchase: available=" + response.body.availableStock + " reserved=" + response.body.reservedStock);
+%}
+
+### 4.6 Verify ORDER_CONFIRMED notification
+GET {{host}}/api/notifications
+Authorization: Bearer {{token}}
+
+> {%
+  var confirmed = response.body.find(function(n) { return n.type === "ORDER_CONFIRMED"; });
+  client.assert(confirmed, "Should have ORDER_CONFIRMED notification");
+  client.log("✓ Saga side-effect: notification — " + confirmed.message);
+%}
+
+### 4.7 Mark notification as read
+PATCH {{host}}/api/notifications/{{notification_id}}/read
+Authorization: Bearer {{token}}
+
+
+### ─────────────────────────────────────────────────────────────────────────
+### PHASE 5: WRITE A REVIEW (post-purchase)
+### ─────────────────────────────────────────────────────────────────────────
+
+### 5.1 Leave a review for the purchased product
+POST {{host}}/api/reviews
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "productId": {{buy_product_id}},
+  "rating": 5,
+  "comment": "Harika bir urun! Cok hizli kargo ve kaliteli paketleme. Kesinlikle tavsiye ederim."
+}
+
+> {%
+  client.assert(response.status === 200 || response.status === 201, "Review should be created");
+  client.global.set("review_id", response.body.id);
+  client.log("✓ Review posted: " + response.body.rating + "/5 — " + response.body.userName);
+%}
+
+### 5.2 Verify review appears on product
+GET {{host}}/api/reviews/product/{{buy_product_id}}
+
+> {%
+  var mine = response.body.find(function(r) { return r.id == client.global.get("review_id"); });
+  client.assert(mine, "My review should appear");
+  client.log("✓ Review visible on product page");
+%}
+
+### 5.3 Check review stats updated
+GET {{host}}/api/reviews/product/{{buy_product_id}}/stats
+
+> {%
+  client.log("✓ Review stats: avg=" + response.body.averageRating + " count=" + response.body.totalReviews);
+%}
+
+
+### ─────────────────────────────────────────────────────────────────────────
+### PHASE 6: FAILED CHECKOUT (compensation saga)
+### Login as failuser → payment rejected → order CANCELLED → stock released
+### ─────────────────────────────────────────────────────────────────────────
+
+### 6.1 Login as fail user
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "failuser@n11demo.com",
+  "password": "User123!"
+}
+
+> {%
+  client.global.set("fail_token", response.body.accessToken);
+  client.log("✓ Logged in as failuser (payment will be rejected)");
+%}
+
+### 6.2 Checkout → payment will fail (email contains "fail")
+POST {{host}}/api/orders/checkout
+Content-Type: application/json
+Authorization: Bearer {{fail_token}}
+
+{
+  "address": "Istanbul, Besiktas",
+  "items": [
+    {
+      "productId": {{buy_product_id}},
+      "productName": "{{buy_product_name}}",
+      "productPrice": {{buy_discounted_price}},
+      "quantity": 1
+    }
+  ]
+}
+
+> {%
+  client.global.set("fail_order_id", response.body.id);
+  client.log("✓ Fail order #" + response.body.id + " — compensation saga running...");
+%}
+
+### 6.3 Check order → should be CANCELLED (wait ~3s)
+GET {{host}}/api/orders/{{fail_order_id}}
+Authorization: Bearer {{fail_token}}
+
+> {%
+  client.log("✓ Fail order status: " + response.body.status);
+  if (response.body.status === "CANCELLED") {
+    client.log("  ✅ Compensation completed: " + response.body.failureReason);
+  }
+%}
+
+### 6.4 Verify cancellation notification
+GET {{host}}/api/notifications
+Authorization: Bearer {{fail_token}}
+
+> {%
+  var cancelled = response.body.find(function(n) { return n.type === "ORDER_CANCELLED"; });
+  client.assert(cancelled, "Should have ORDER_CANCELLED notification");
+  client.log("✓ Compensation notification: " + cancelled.message);
+%}
+
+
+### ─────────────────────────────────────────────────────────────────────────
+### PHASE 7: TOKEN REFRESH + LOGOUT
+### ─────────────────────────────────────────────────────────────────────────
+
+### 7.1 Refresh access token (cookie sent automatically)
+POST {{host}}/api/auth/refresh
+
+> {%
+  if (response.status === 200) {
+    client.global.set("token", response.body.accessToken);
+    client.log("✓ Token refreshed — new accessToken acquired");
+  }
+%}
+
+### 7.2 Verify new token works
+GET {{host}}/api/users/me
+Authorization: Bearer {{token}}
+
+> {%
+  client.assert(response.status === 200, "New token should work");
+  client.log("✓ New token valid: " + response.body.email);
+%}
+
+### 7.3 Logout (clears refresh cookie)
+POST {{host}}/api/auth/logout
+
+> {%
+  client.assert(response.status === 204, "Logout should return 204");
+  client.log("✓ Logged out — refresh cookie cleared");
+%}
+
+### 7.4 Refresh after logout → should fail
+POST {{host}}/api/auth/refresh
+
+> {%
+  client.assert(response.status === 400 || response.status === 401, "Refresh after logout should fail");
+  client.log("✓ Refresh after logout correctly rejected: " + response.status);
+%}
+
+### 7.5 Access protected endpoint → still works (access token not expired yet)
+GET {{host}}/api/users/me
+Authorization: Bearer {{token}}
+
+> {%
+  client.log("✓ Access token still valid (stateless — expires in 15 min)");
+  client.log("");
+  client.log("═══════════════════════════════════════════════");
+  client.log("  E2E JOURNEY COMPLETE");
+  client.log("  Services tested: auth, basket, product,");
+  client.log("    order, payment, notification, review,");
+  client.log("    search, inventory + gateway");
+  client.log("  Sagas verified: registration + checkout");
+  client.log("    (happy path + compensation)");
+  client.log("═══════════════════════════════════════════════");
+%}

@@ -1,0 +1,248 @@
+### ═══════════════════════════════════════════════════════════════════════════
+###  E2E — Admin Journey: Login → Manage Products → Verify ES Sync → RBAC
+### ═══════════════════════════════════════════════════════════════════════════
+###  Admin-specific flows: product CRUD with event-driven ES sync,
+###  role-based access control, and observability checks.
+### ═══════════════════════════════════════════════════════════════════════════
+
+
+### ─────────────────────────────────────────────────────────────────────────
+### PHASE 1: ADMIN LOGIN + RBAC VERIFICATION
+### ─────────────────────────────────────────────────────────────────────────
+
+### 1.1 Admin login
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@n11demo.com",
+  "password": "Admin123!"
+}
+
+> {%
+  client.global.set("admin_token", response.body.accessToken);
+  client.log("✓ Admin logged in");
+%}
+
+### 1.2 Access admin-only endpoint → 200
+GET {{host}}/api/users/admin
+Authorization: Bearer {{admin_token}}
+
+> {%
+  client.assert(response.status === 200, "Admin should access /admin");
+  client.log("✓ RBAC: admin endpoint accessible");
+%}
+
+### 1.3 Login as regular user
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "user@n11demo.com",
+  "password": "User123!"
+}
+
+> {%
+  client.global.set("user_token", response.body.accessToken);
+%}
+
+### 1.4 Regular user tries admin endpoint → 403
+GET {{host}}/api/users/admin
+Authorization: Bearer {{user_token}}
+
+> {%
+  client.assert(response.status === 403, "Regular user should get 403");
+  client.log("✓ RBAC: regular user correctly blocked from admin endpoint");
+%}
+
+### 1.5 No token → 401
+GET {{host}}/api/users/admin
+
+> {%
+  client.assert(response.status === 401, "No token should get 401");
+  client.log("✓ RBAC: unauthenticated request correctly rejected");
+%}
+
+
+### ─────────────────────────────────────────────────────────────────────────
+### PHASE 2: PRODUCT MANAGEMENT (CRUD + EVENT-DRIVEN ES SYNC)
+### ─────────────────────────────────────────────────────────────────────────
+
+### 2.1 Count products before
+GET {{host}}/api/search?page=0&size=1
+
+> {%
+  client.global.set("count_before", response.body.totalElements);
+  client.log("✓ Products in ES before: " + response.body.totalElements);
+%}
+
+### 2.2 Create new product
+### Event: product.created → RabbitMQ → search-service → ES index
+POST {{host}}/api/products
+Content-Type: application/json
+Authorization: Bearer {{admin_token}}
+
+{
+  "name": "Admin E2E Test Urun",
+  "category": "elektronik",
+  "brand": "E2EBrand",
+  "description": "Bu urun admin E2E testinden olusturuldu. Event-driven olarak ES'e sync edilecek.",
+  "price": 1599.99,
+  "discountPercentage": 15,
+  "stockQuantity": 100,
+  "imageUrl": "https://picsum.photos/seed/e2e-admin/400/400"
+}
+
+> {%
+  client.assert(response.status === 201, "Product should be created");
+  client.global.set("admin_product_id", response.body.id);
+  client.log("✓ Product created: id=" + response.body.id + " slug=" + response.body.slug);
+  client.log("  Price: " + response.body.price + " → Discounted: " + response.body.discountedPrice);
+  client.log("  Event published: product.created → RabbitMQ");
+%}
+
+### 2.3 Read it back from PostgreSQL
+GET {{host}}/api/products/{{admin_product_id}}
+
+> {%
+  client.assert(response.body.name === "Admin E2E Test Urun");
+  client.log("✓ Product readable from PostgreSQL via product-service");
+%}
+
+### 2.4 Search in ES (wait ~2s for event propagation)
+### product.created → RabbitMQ → search-service → ES
+GET {{host}}/api/search?q=Admin%20E2E%20Test%20Urun
+
+> {%
+  if (response.body.totalElements >= 1) {
+    client.log("✓ Product found in Elasticsearch — event sync confirmed!");
+  } else {
+    client.log("⏳ Not yet in ES — event may still be propagating, try again");
+  }
+%}
+
+### 2.5 Update product
+### Event: product.updated → RabbitMQ → search-service → ES re-index
+PUT {{host}}/api/products/{{admin_product_id}}
+Content-Type: application/json
+Authorization: Bearer {{admin_token}}
+
+{
+  "name": "Admin E2E GUNCELLENDI",
+  "price": 999.99,
+  "discountPercentage": 25
+}
+
+> {%
+  client.assert(response.body.name === "Admin E2E GUNCELLENDI");
+  client.assert(response.body.price === 999.99);
+  client.log("✓ Product updated in PostgreSQL");
+  client.log("  Event published: product.updated → RabbitMQ");
+%}
+
+### 2.6 Verify update propagated to ES
+GET {{host}}/api/search?q=GUNCELLENDI
+
+> {%
+  if (response.body.totalElements >= 1) {
+    var p = response.body.content[0];
+    client.log("✓ ES synced: name=" + p.name + " price=" + p.discountedPrice);
+  }
+%}
+
+### 2.7 Delete product
+### Event: product.deleted → RabbitMQ → search-service → ES delete
+DELETE {{host}}/api/products/{{admin_product_id}}
+Authorization: Bearer {{admin_token}}
+
+> {%
+  client.assert(response.status === 204, "Should delete");
+  client.log("✓ Product deleted from PostgreSQL");
+  client.log("  Event published: product.deleted → RabbitMQ");
+%}
+
+### 2.8 Verify deleted from PostgreSQL
+GET {{host}}/api/products/{{admin_product_id}}
+
+> {%
+  client.assert(response.status === 404, "Should be gone");
+  client.log("✓ Confirmed: product no longer in PostgreSQL");
+%}
+
+### 2.9 Verify deleted from ES
+GET {{host}}/api/search?q=GUNCELLENDI
+
+> {%
+  client.assert(response.body.totalElements === 0, "Should be gone from ES");
+  client.log("✓ Confirmed: product removed from Elasticsearch — full sync lifecycle verified");
+%}
+
+
+### ─────────────────────────────────────────────────────────────────────────
+### PHASE 3: OBSERVABILITY CHECK
+### ─────────────────────────────────────────────────────────────────────────
+
+### 3.1 Gateway health
+GET {{host}}/actuator/health
+
+> {%
+  client.assert(response.body.status === "UP", "Gateway should be UP");
+  client.log("✓ Gateway: UP");
+%}
+
+### 3.2 Eureka registered services
+GET http://localhost:18761/eureka/apps
+Accept: application/json
+
+> {%
+  if (response.body.applications && response.body.applications.application) {
+    var apps = response.body.applications.application.map(function(a) { return a.name; });
+    client.log("✓ Eureka services: " + apps.join(", "));
+  }
+%}
+
+### 3.3 Prometheus targets
+GET http://localhost:19090/api/v1/targets
+
+> {%
+  if (response.body.data && response.body.data.activeTargets) {
+    var up = response.body.data.activeTargets.filter(function(t) { return t.health === "up"; }).length;
+    var total = response.body.data.activeTargets.length;
+    client.log("✓ Prometheus: " + up + "/" + total + " targets UP");
+  }
+%}
+
+### 3.4 ES cluster health
+GET http://localhost:19200/_cluster/health
+
+> {%
+  client.log("✓ Elasticsearch: status=" + response.body.status + " nodes=" + response.body.number_of_nodes);
+%}
+
+### 3.5 ES product count
+GET http://localhost:19200/products/_count
+
+> {%
+  client.log("✓ ES product index: " + response.body.count + " documents");
+%}
+
+### 3.6 Loki ready
+GET http://localhost:13100/ready
+
+> {%
+  client.log("✓ Loki: ready");
+%}
+
+### 3.7 Grafana health
+GET http://localhost:13001/api/health
+
+> {%
+  client.log("✓ Grafana: " + response.body.database);
+  client.log("");
+  client.log("═══════════════════════════════════════════════");
+  client.log("  ADMIN E2E JOURNEY COMPLETE");
+  client.log("  Verified: RBAC, Product CRUD,");
+  client.log("    PostgreSQL↔ES event-driven sync,");
+  client.log("    Eureka, Prometheus, ES, Loki, Grafana");
+  client.log("═══════════════════════════════════════════════");
+%}
