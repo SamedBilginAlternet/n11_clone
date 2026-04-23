@@ -97,16 +97,21 @@ services:
   promtail:
     image: grafana/promtail:3.1.0
     container_name: n11-promtail
+    user: root
     command: -config.file=/etc/promtail/promtail-config.yaml
     volumes:
       - ./infra/promtail/promtail-config.yaml:/etc/promtail/promtail-config.yaml:ro
-      # Read Docker container logs directly off the host socket — no log
-      # driver reconfiguration needed on the services themselves.
       - /var/run/docker.sock:/var/run/docker.sock
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
     depends_on:
       loki:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9080/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     restart: on-failure
 
   prometheus:

@@ -21,12 +21,8 @@ scrape_configs:
         regex: '/(.*)'
         target_label: container
 
-      # Try compose v2 label first, fall back to v1.
+      # Set service label from docker-compose service name.
       - source_labels: ['__meta_docker_container_label_com_docker_compose_service']
-        target_label: service
-      - source_labels: ['__meta_docker_container_label_com_docker_compose_service']
-        regex: '^$'
-        source_labels: ['container']
         target_label: service
 
       # Drop infra containers — keep only app services.
