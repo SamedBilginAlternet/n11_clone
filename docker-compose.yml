@@ -449,28 +449,16 @@ services:
       MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
       MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
     depends_on:
-      auth-service:
-        condition: service_healthy
-      basket-service:
-        condition: service_healthy
-      product-service:
-        condition: service_healthy
-      order-service:
-        condition: service_healthy
-      payment-service:
-        condition: service_healthy
-      notification-service:
-        condition: service_healthy
-      review-service:
-        condition: service_healthy
-      search-service:
-        condition: service_healthy
-      inventory-service:
-        condition: service_healthy
       eureka-server:
         condition: service_healthy
     ports:
       - "${GATEWAY_PORT:-18000}:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8000/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
     restart: on-failure
 
   frontend:
