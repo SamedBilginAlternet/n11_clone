@@ -18,8 +18,8 @@ export function ProductCard({ product }: { product: Product }) {
           className="w-full h-full object-cover group-hover:scale-105 transition-transform"
         />
         {hasDiscount && (
-          <span className="absolute top-2 left-2 bg-n11-orange text-white text-xs font-bold px-2 py-0.5 rounded">
-            %{product.discountPercentage} İNDİRİM
+          <span className="absolute top-2 left-2 bg-n11-red text-white text-xs font-bold px-2 py-0.5 rounded">
+            %{product.discountPercentage}
           </span>
         )}
       </div>
@@ -38,10 +38,10 @@ export function ProductCard({ product }: { product: Product }) {
           {hasDiscount ? (
             <>
               <div className="text-xs text-gray-400 line-through">{formatTRY(product.price)}</div>
-              <div className="text-lg font-bold text-n11-purple">{formatTRY(product.discountedPrice)}</div>
+              <div className="text-lg font-bold text-n11-green">{formatTRY(product.discountedPrice)}</div>
             </>
           ) : (
-            <div className="text-lg font-bold text-n11-purple">{formatTRY(product.price)}</div>
+            <div className="text-lg font-bold text-n11-green">{formatTRY(product.price)}</div>
           )}
         </div>
       </div>

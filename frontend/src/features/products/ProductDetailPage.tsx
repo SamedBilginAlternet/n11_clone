@@ -83,7 +83,7 @@ export function ProductDetailPage() {
           {product.discountPercentage > 0 && (
             <div className="text-sm text-gray-400 line-through">{formatTRY(product.price)}</div>
           )}
-          <div className="text-3xl font-bold text-n11-purple">
+          <div className="text-3xl font-bold text-n11-green">
             {formatTRY(product.discountedPrice)}
           </div>
           {product.discountPercentage > 0 && (
@@ -108,12 +108,12 @@ export function ProductDetailPage() {
 
         <Button
           onClick={handleAdd}
-          variant="secondary"
+          variant="success"
           size="lg"
           loading={adding}
           disabled={product.stockQuantity === 0}
         >
-          {product.stockQuantity === 0 ? 'Stokta Yok' : 'Sepete Ekle'}
+          {product.stockQuantity === 0 ? 'Stokta Yok' : '🐞 Sepete Ekle'}
         </Button>
       </div>
 

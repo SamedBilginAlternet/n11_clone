@@ -28,7 +28,8 @@ export function HomePage() {
     <div className="space-y-6">
       <CategoryBar categories={categories} />
 
-      <div className="n11-gradient rounded-xl p-6 text-white">
+      <div className="n11-gradient rounded-xl p-6 text-white relative overflow-hidden">
+        <span className="absolute -right-2 -bottom-2 text-7xl opacity-20 select-none" aria-hidden>🐞</span>
         <h1 className="text-2xl font-bold">{heading}</h1>
         <p className="text-sm opacity-90 mt-1">
           {page ? `${page.totalElements} ürün bulundu` : 'Ürünler yükleniyor...'}

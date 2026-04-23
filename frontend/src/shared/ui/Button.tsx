@@ -1,6 +1,6 @@
 import { ButtonHTMLAttributes, forwardRef } from 'react';
 
-type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
+type Variant = 'primary' | 'secondary' | 'success' | 'ghost' | 'danger';
 type Size = 'sm' | 'md' | 'lg';
 
 interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -13,6 +13,7 @@ interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
 const VARIANTS: Record<Variant, string> = {
   primary: 'bg-n11-purple text-white hover:bg-purple-700 disabled:bg-purple-300',
   secondary: 'bg-n11-orange text-white hover:bg-orange-600 disabled:bg-orange-300',
+  success: 'bg-n11-green text-white hover:bg-green-700 disabled:bg-green-300',
   ghost: 'bg-transparent text-gray-700 hover:bg-gray-100 border border-gray-300',
   danger: 'bg-red-600 text-white hover:bg-red-700 disabled:bg-red-300',
 };

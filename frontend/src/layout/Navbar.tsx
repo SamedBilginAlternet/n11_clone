@@ -28,7 +28,8 @@ export function Navbar() {
   return (
     <header className="n11-gradient text-white shadow-md sticky top-0 z-20">
       <div className="max-w-7xl mx-auto px-4 py-3 flex items-center gap-4">
-        <Link to="/" className="text-2xl font-bold tracking-tight">
+        <Link to="/" className="flex items-center gap-1.5 text-2xl font-bold tracking-tight shrink-0">
+          <span className="text-3xl leading-none" role="img" aria-label="n11">🐞</span>
           n<span className="text-n11-orange">11</span>
         </Link>
 

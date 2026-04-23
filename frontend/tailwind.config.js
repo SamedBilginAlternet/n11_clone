@@ -7,7 +7,9 @@ export default {
         // n11 brand palette
         n11: {
           purple: '#6633CC',
+          green: '#5BA829',
           orange: '#F9A825',
+          red: '#E3051F',
           dark: '#1A1A2E',
           gray: '#F5F5F7',
         },
