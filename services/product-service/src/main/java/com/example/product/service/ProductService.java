@@ -33,7 +33,6 @@ public class ProductService {
 
     private final ProductRepository productRepository;
 
-    @Cacheable(value = "products:list", key = "T(String).valueOf(#category) + ':' + T(String).valueOf(#q) + ':' + #pageable.pageNumber + ':' + #pageable.pageSize")
     public Page<ProductResponse> list(String category, String q, Pageable pageable) {
         Page<Product> page;
         if (q != null && !q.isBlank()) {
