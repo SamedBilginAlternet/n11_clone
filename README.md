@@ -1,9 +1,10 @@
 # n11 Clone — Mikroservis + Saga + Elasticsearch + Observability + React
 
-Spring Boot 3.3 / Java 21 tabanlı **10 mikroservis**, RabbitMQ üzerinde
+Spring Boot 3.3 / Java 21 tabanlı **10 mikroservis + Eureka Server**, RabbitMQ üzerinde
 **choreography-based Saga pattern**, Elasticsearch ile **faceted full-text search**,
 **üç-sütunlu observability stack** (Prometheus + Grafana + Jaeger + Loki), Spring Cloud
-Gateway, ve React + Vite + Tailwind ile yazılmış n11 tarzı Türkçe e-ticaret arayüzü.
+Gateway + **Netflix Eureka service discovery**, ve React + Vite + Tailwind ile yazılmış
+n11 tarzı Türkçe e-ticaret arayüzü.
 
 İki saga koreografisi iki farklı gerçek dağıtık işlem sorununu çözer:
 
@@ -37,7 +38,13 @@ CI/CD: GitHub Actions her push'ta 10 servis + frontend için paralel build + tes
                          ┌──────────▼───────────┐
                          │   api-gateway        │  :8000
                          │   Spring Cloud GW    │
+                         │   (lb:// via Eureka) │
                          └──┬──────────────────┬┘
+                            │                  │
+                   ┌────────▼────────┐         │
+                   │  eureka-server  │  :8761  │
+                   │  Service Disc.  │◄── all services register
+                   └─────────────────┘         │
                             │                  │
        ┌──────────┬─────────┼──────────┬───────┼──────────┬──────────┬──────────┐
        ▼          ▼         ▼          ▼       ▼          ▼          ▼          ▼
@@ -72,14 +79,15 @@ CI/CD: GitHub Actions her push'ta 10 servis + frontend için paralel build + tes
 |--------|------|------|-----------|--------------------|
 | **auth-service** | 8080 | `authdb` | UserRegistered **publisher** + BasketCreationFailed **compensator** | `POST /api/auth/register\|login\|refresh\|logout`, `GET /api/users/me` |
 | **basket-service** | 8081 | `basketdb` | UserRegistered **consumer** (empty cart), OrderConfirmed **consumer** (clear cart) | `GET /api/basket`, `POST /api/basket/items`, `PUT/DELETE /api/basket/items/{id}` |
-| **product-service** | 8082 | `productdb` | — | `GET /api/products?category=&q=`, `GET /api/products/{id}`, `GET /api/products/slug/{slug}`, `GET /api/products/categories` |
+| **product-service** | 8082 | `productdb` + Redis cache | — | `GET /api/products?category=&q=`, `GET /api/products/{id}`, `GET /api/products/slug/{slug}`, `GET /api/products/categories` |
 | **order-service** | 8083 | `orderdb` | OrderCreated **publisher**, Payment{Succeeded\|Failed} **consumer**, Order{Confirmed\|Cancelled} **publisher** | `POST /api/orders/checkout`, `GET /api/orders`, `GET /api/orders/{id}` |
 | **payment-service** | 8084 | `paymentdb` | OrderCreated **consumer**, Payment{Succeeded\|Failed} **publisher** | `GET /api/payments`, `GET /api/payments/order/{id}` |
 | **notification-service** | 8085 | `notificationdb` | UserRegistered + OrderConfirmed + OrderCancelled **consumer** (fan-out) | `GET /api/notifications`, `GET /api/notifications/unread-count`, `PATCH /api/notifications/{id}/read`, `DELETE /api/notifications/{id}` |
 | **review-service** | 8086 | `reviewdb` | — | `GET /api/reviews/product/{id}`, `GET /api/reviews/product/{id}/stats`, `POST /api/reviews`, `DELETE /api/reviews/{id}` |
 | **search-service** | 8087 | Elasticsearch `products` index | — | `GET /api/search?q=&category=&brand=&minPrice=&maxPrice=&minRating=&sort=&page=&size=`, `POST /api/search/reindex` |
 | **inventory-service** | 8088 | `inventorydb` | OrderCreated **consumer** (reserve), OrderCancelled **consumer** (release), InventoryReserved + InventoryOutOfStock **publisher** | `GET /api/inventory`, `GET /api/inventory/{productId}` |
-| **api-gateway** | 8000 | — | — | Public giriş noktası, tüm `/api/**` yolları uygun servise yönlendirir |
+| **eureka-server** | 8761 | — | — | Netflix Eureka service registry; tüm servisler register olur, gateway `lb://` ile keşfeder |
+| **api-gateway** | 8000 | — | — | Public giriş noktası, Eureka `lb://` discovery ile servis yönlendirmesi, sadece eureka-server'a depends_on |
 
 Her Spring Boot servisi `/actuator/health` ve `/actuator/info` açar. auth-service Swagger UI'sı
 gateway üzerinden `http://localhost:18000/swagger-ui.html`.
@@ -176,9 +184,10 @@ sadece **routing key + payload alan adları**; servisler birbirinin Java sınıf
 
 ## Arama (search-service + Elasticsearch)
 
-**Index**: `products` — product-service'teki kataloğun denormalize kopyası. Metin alanları
-ES'in built-in `turkish` analyzer'ı ile indekslenir, böylece "telefonlar" → "telefon"
-kökleme ve diakritik (ç, ğ, ı, ö, ş, ü) normalize işlemleri sorgu zamanında çalışır.
+**Index**: `products` — product-service'teki kataloğun denormalize kopyası (**200 ürün**,
+8 kategoride eşit 25'er). Metin alanları ES'in built-in `turkish` analyzer'ı ile
+indekslenir, böylece "telefonlar" → "telefon" kökleme ve diakritik (ç, ğ, ı, ö, ş, ü)
+normalize işlemleri sorgu zamanında çalışır.
 
 **Sorgu yetenekleri** (`GET /api/search`):
 
@@ -278,6 +287,7 @@ Tüm bileşenler ayağa kalkınca (varsayılan portlar):
 | <http://localhost:13000> | React arayüzü |
 | <http://localhost:18000> | API gateway |
 | <http://localhost:18000/swagger-ui.html> | auth-service Swagger UI |
+| <http://localhost:18761> | Eureka dashboard — registered services |
 | <http://localhost:25672> | RabbitMQ yönetim paneli (`guest` / `guest`) |
 | <http://localhost:26686> | **Jaeger UI** — saga trace waterfall'unu buradan izle |
 | <http://localhost:13001> | **Grafana** — hazır "n11 — Services Overview" dashboard (anonim Viewer, admin/admin ile edit) |
@@ -290,9 +300,10 @@ Tüm bileşenler ayağa kalkınca (varsayılan portlar):
 > **Not:** `./setup-ports.sh` çalıştırdıysanız portlar farklı olabilir — `.env` dosyasına
 > veya script çıktısına bakın.
 
-Gateway, on servisin + Elasticsearch'ün + Jaeger'ın healthcheck'lerinin `healthy`
-olmasını bekler — ilk soğuk açılış 1–2 dakika sürebilir (ES cluster'ın `yellow`'a
-gelmesi + indexer'ın ürünleri çekmesi dahil).
+Gateway artık sadece Eureka Server'ın healthy olmasını bekler — servisler
+`lb://` ile dinamik keşfedilir, her servis hazır oldukça otomatik register olur.
+İlk soğuk açılış ~1 dakika sürebilir (ES cluster'ın `yellow`'a gelmesi +
+indexer'ın 200 ürünü çekmesi dahil).
 
 ### Demo hesapları
 
@@ -362,6 +373,7 @@ otomatik bulur, ama elle `.env` dosyasına da yazabilirsiniz (bkz. `.env.example
 | `PROMETHEUS_PORT` | `19090` | Prometheus |
 | `GRAFANA_PORT` | `13001` | Grafana |
 | `ELASTICSEARCH_PORT` | `19200` | Elasticsearch |
+| `EUREKA_PORT` | `18761` | Eureka Server |
 | `GATEWAY_PORT` | `18000` | API Gateway |
 | `FRONTEND_PORT` | `13000` | React Frontend |
 
@@ -373,13 +385,16 @@ Per-servis override'lar her Dockerfile/application.yml içinde dokümante edildi
 
 - **Error envelope**: RFC 7807 `application/problem+json`. Tüm servislerin
   `GlobalExceptionHandler`'ı `ProblemDetail` döner (`status`, `title`, `detail`, `instance`,
-  `timestamp`, validasyonda `fields`, rate-limit'te `retryAfterSeconds`).
+  `timestamp`, validasyonda `fields`, rate-limit'te `retryAfterSeconds`). product-service
+  ek olarak `DataAccessException` (503), `MethodArgumentTypeMismatch` (400) ve generic
+  500'lerde `error` + `message` alanları döner.
 - **Migrations**: Flyway; her servisin `src/main/resources/db/migration/` klasöründe.
   Schema değişiklikleri yalnızca yeni `V{n}__*.sql` dosyasıyla. (search-service'in
   relational DB'si yoktur; ES mapping `@Document` anotasyonlarıyla gelir.)
 - **JPA auditing**: `BaseEntity` ile `createdAt` / `updatedAt` otomatik.
-- **Docker**: multi-stage build, çalışma image'i `eclipse-temurin:21-jre-alpine`,
-  non-root `appuser`.
+- **Docker**: multi-stage build + BuildKit `--mount=type=cache,target=/root/.m2/repository`
+  (Maven dependency'leri build'ler arası paylaşılır, rebuild ~sıfıra düşer), çalışma
+  image'i `eclipse-temurin:21-jre-alpine`, non-root `appuser`.
 - **Healthcheck**: her servis kendi `/actuator/health` endpoint'iyle compose
   `depends_on: condition: service_healthy` kuralına uygun. Elasticsearch
   `_cluster/health?wait_for_status=yellow` ile sağlıklı kabul edilir.
@@ -504,7 +519,8 @@ yapar — span'dan log'lara geçer. Üç sütun arasında **çift yönlü click-
 korelasyonu var.
 
 Promtail Docker socket'i scrape ettiği için servislerin log driver'ını değiştirmek
-gerekmiyor; `docker logs <container>` de olduğu gibi çalışır.
+gerekmiyor; `docker logs <container>` de olduğu gibi çalışır. Promtail `user: root`
+ile çalışır — Docker socket ve container log dosyalarına erişim için gereklidir.
 
 ---
 
@@ -512,7 +528,7 @@ gerekmiyor; `docker logs <container>` de olduğu gibi çalışır.
 
 `.github/workflows/ci.yml` her `push` ve `pull_request`'te:
 
-- **backend job** — matrix build: 10 servisin her biri için `mvn -B -ntp verify`.
+- **backend job** — matrix build: 11 servisin (10 + eureka-server) her biri için `mvn -B -ntp verify`.
   Maven dependency cache açık. `verify` test suite'ini ve Spring Boot packaging'i
   çalıştırır.
 - **frontend job** — `npm run build` (`tsc -b` dahil), böylece TS tip hataları
