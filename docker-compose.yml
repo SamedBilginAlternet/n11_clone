@@ -246,6 +246,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: postgres
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: "6379"
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: "5672"
       EUREKA_URI: http://eureka-server:8761/eureka
       MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
       MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
@@ -253,6 +255,8 @@ services:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
       eureka-server:
         condition: service_healthy
@@ -417,6 +421,8 @@ services:
     environment:
       ELASTICSEARCH_URIS: http://elasticsearch:9200
       PRODUCT_SERVICE_URI: http://product-service:8082
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: "5672"
       EUREKA_URI: http://eureka-server:8761/eureka
       MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
       MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
@@ -424,6 +430,8 @@ services:
       elasticsearch:
         condition: service_healthy
       product-service:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
       eureka-server:
         condition: service_healthy
