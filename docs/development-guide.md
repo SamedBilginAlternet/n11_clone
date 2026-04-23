@@ -479,6 +479,108 @@ In `frontend/src/app/router.tsx`, add the route:
 
 ---
 
+## Redis & Caching
+
+Redis is used **only by product-service** as a read-through cache for the product catalog. All other services rely on PostgreSQL and RabbitMQ exclusively.
+
+### What Is Cached
+
+| Cache Name | Key | TTL | Method | Endpoint |
+|------------|-----|-----|--------|----------|
+| `products:byId` | Product ID | 30 min | `ProductService.getById()` | `GET /api/products/{id}` |
+| `products:bySlug` | Slug string | 30 min | `ProductService.getBySlug()` | `GET /api/products/slug/{slug}` |
+| `products:categories` | (none — single entry) | 24 hours | `ProductService.categories()` | `GET /api/products/categories` |
+
+The paginated `list()` method is **not cached** — `Page<T>` objects cannot be reliably serialized with Redis JSON, and the DB query is fast with indexes.
+
+### How It Works
+
+```
+First request:   Controller → @Cacheable → Cache MISS → PostgreSQL → write to Redis → Response
+Next requests:   Controller → @Cacheable → Cache HIT  → read from Redis → Response (no DB call)
+After TTL:       Entry expires → next request is a cache miss again
+```
+
+### Configuration
+
+**Redis container** (`docker-compose.yml`):
+- `redis:7-alpine` with 128 MB memory limit
+- Eviction policy: `allkeys-lru` (least-recently-used keys evicted when full)
+- Persistent volume: `redis_data`
+
+**Spring Boot** (`product-service/application.yml`):
+```yaml
+spring.data.redis:
+  host: ${SPRING_DATA_REDIS_HOST:localhost}
+  port: ${SPRING_DATA_REDIS_PORT:6379}
+spring.cache:
+  type: redis
+  redis:
+    time-to-live: 600000        # 10 min default
+    cache-null-values: false
+```
+
+**Cache manager** (`RedisConfig.java`):
+- Serializer: `GenericJackson2JsonRedisSerializer` (stores Java objects as JSON)
+- Per-cache TTL overrides for `products:byId` (30 min), `products:bySlug` (30 min), `products:categories` (24 h)
+
+### Error Handling
+
+`CacheConfig.java` implements `CachingConfigurer` with a custom `CacheErrorHandler`. If Redis is unreachable or serialization fails:
+- A `WARN` log is emitted with cache name, key, and error message
+- The request falls through to the database — **no 500 error**
+- The service remains fully functional without Redis
+
+This is intentionally separate from `RedisConfig` to avoid bean resolution conflicts between `CachingConfigurer.cacheManager()` and the `@Bean` method.
+
+### Cache Invalidation
+
+There is **no explicit invalidation** (`@CacheEvict`). Entries expire via TTL only. This is acceptable because:
+- The product catalog is read-only (seeded via Flyway, no CRUD API)
+- A 30-minute staleness window is fine for a catalog service
+- If a CRUD API is added later, `@CacheEvict` should be added to write methods
+
+### Adding a New Cache
+
+1. Add `@Cacheable` to the service method:
+   ```java
+   @Cacheable(value = "products:myCache", key = "#someParam")
+   public MyResponse myMethod(Long someParam) { ... }
+   ```
+
+2. Optionally add a custom TTL in `RedisConfig.java`:
+   ```java
+   .withCacheConfiguration("products:myCache",
+       defaults.entryTtl(Duration.ofMinutes(15)))
+   ```
+
+3. **Avoid caching `Page<T>`** — Spring Data's `PageImpl` does not deserialize cleanly with JSON. Cache individual items or simple DTOs instead.
+
+### Local Development
+
+Redis is only required when running product-service. To run other services locally, Redis is not needed. If product-service starts without Redis, the `CacheErrorHandler` logs warnings and every request hits the database directly.
+
+### Useful Commands
+
+```bash
+# Connect to Redis CLI (default port)
+docker exec -it n11-redis redis-cli
+
+# See all cached keys
+KEYS *
+
+# Inspect a specific cached product
+GET "products:byId::42"
+
+# Clear all caches
+FLUSHALL
+
+# Monitor real-time commands
+MONITOR
+```
+
+---
+
 ## Code Conventions
 
 ### Package Structure
