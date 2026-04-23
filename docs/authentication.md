@@ -24,17 +24,17 @@ sequenceDiagram
     participant A as auth-service
     participant S as Any Service
 
-    C->>G: POST /api/auth/login {email, password}
+    C->>G: POST /api/auth/login (email, password)
     G->>A: Forward request
     A->>A: AuthenticationManager.authenticate()
     A->>A: Generate JWT access token (15 min)
     A->>A: Create refresh token in DB
-    A-->>G: 200 {accessToken} + Set-Cookie: refresh_token (HttpOnly)
+    A-->>G: 200 accessToken + Set-Cookie refresh_token (HttpOnly)
     G-->>C: Pass through
 
     Note over C: Client stores accessToken in memory (Zustand)
 
-    C->>G: GET /api/orders (Authorization: Bearer <accessToken>)
+    C->>G: GET /api/orders (Authorization: Bearer token)
     G->>S: Forward with Authorization header
     S->>S: JwtAuthFilter extracts + validates token
     S->>S: Extract username + roles from JWT claims
@@ -70,32 +70,32 @@ sequenceDiagram
     participant DB as authdb
 
     Note over C: Login
-    C->>G: POST /api/auth/login {email, password}
+    C->>G: POST /api/auth/login (email, password)
     G->>A: Forward
     A->>DB: Validate credentials
     A->>DB: INSERT refresh_token (token=UUID, user_id, expires_at)
-    A-->>C: 200 {accessToken} + Set-Cookie: refresh_token=<UUID>; HttpOnly; Path=/api/auth
+    A-->>C: 200 accessToken + Set-Cookie refresh_token=UUID HttpOnly Path=/api/auth
 
     Note over C: Access token expires after 15 min
 
-    C->>G: GET /api/orders (Authorization: Bearer <expired>)
+    C->>G: GET /api/orders (Authorization: Bearer expired-token)
     G->>A: Forward
-    A-->>C: 401 "Access token expired"
+    A-->>C: 401 Access token expired
 
     Note over C: Frontend detects 401, calls refresh
 
-    C->>G: POST /api/auth/refresh (Cookie: refresh_token=<UUID>)
+    C->>G: POST /api/auth/refresh (Cookie: refresh_token=UUID)
     G->>A: Forward (cookie included)
-    A->>DB: SELECT refresh_token WHERE token=<UUID>
+    A->>DB: SELECT refresh_token WHERE token=UUID
     A->>A: Validate: not expired, not revoked
     A->>DB: UPDATE refresh_token SET revoked=true (old token)
     A->>DB: INSERT new refresh_token (new UUID)
     A->>A: Generate new access token
-    A-->>C: 200 {accessToken} + Set-Cookie: refresh_token=<new UUID>
+    A-->>C: 200 accessToken + Set-Cookie refresh_token=newUUID
 
     Note over C: Client retries original request with new access token
 
-    C->>G: GET /api/orders (Authorization: Bearer <new>)
+    C->>G: GET /api/orders (Authorization: Bearer new-token)
     G-->>C: 200 orders data
 ```
 
@@ -153,10 +153,10 @@ Every authenticated service runs `JwtAuthFilter` as a Spring Security filter ins
 ```mermaid
 flowchart TD
     A["Incoming HTTP Request"] --> B{"Authorization header present?"}
-    B -->|No| C["Continue filter chain\n(unauthenticated)"]
-    B -->|Yes| D{"Starts with 'Bearer '?"}
+    B -->|No| C["Continue filter chain unauthenticated"]
+    B -->|Yes| D{"Starts with Bearer?"}
     D -->|No| C
-    D -->|Yes| E["Extract token\n(substring after 'Bearer ')"]
+    D -->|Yes| E["Extract token after Bearer prefix"]
     E --> F["Parse JWT + verify signature"]
     F -->|SignatureException| G["401 Invalid token"]
     F -->|MalformedJwtException| G
@@ -165,7 +165,7 @@ flowchart TD
     I --> J{"SecurityContext already has auth?"}
     J -->|Yes| C
     J -->|No| K["Extract roles from 'roles' claim"]
-    K --> L["Create UsernamePasswordAuthenticationToken\nwith username + authorities"]
+    K --> L["Create AuthenticationToken with username + authorities"]
     L --> M["Set SecurityContext.authentication"]
     M --> C
 ```

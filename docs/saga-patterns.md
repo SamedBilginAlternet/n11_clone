@@ -38,7 +38,7 @@ sequenceDiagram
     Auth->>Auth: Validate + hash password
     Auth->>Auth: INSERT into users table
     Auth->>RMQ: Publish "user.registered"
-    Auth-->>Client: 201 {accessToken} + cookie
+    Auth-->>Client: 201 accessToken + cookie
 
     par Basket creates empty cart
         RMQ->>Basket: Consume "user.registered"
@@ -98,11 +98,11 @@ sequenceDiagram
     Client->>Order: POST /api/orders/checkout
     Order->>Order: INSERT order (status=PENDING)
     Order->>RMQ: Publish "order.created"
-    Order-->>Client: 202 Accepted {order with PENDING status}
+    Order-->>Client: 202 Accepted (order with PENDING status)
 
     RMQ->>Inv: Consume "order.created"
     Inv->>Inv: Reserve stock atomically
-    Note over Inv: available--, reserved++ per line<br/>INSERT reservations per line
+    Note over Inv: available--, reserved++ per line. INSERT reservations per line
     Inv->>RMQ: Publish "inventory.reserved"
 
     RMQ->>Pay: Consume "inventory.reserved"
