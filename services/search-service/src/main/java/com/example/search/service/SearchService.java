@@ -3,11 +3,13 @@ package com.example.search.service;
 import co.elastic.clients.elasticsearch._types.FieldSort;
 import co.elastic.clients.elasticsearch._types.SortOptions;
 import co.elastic.clients.elasticsearch._types.SortOrder;
+import co.elastic.clients.elasticsearch._types.aggregations.Aggregate;
 import co.elastic.clients.elasticsearch._types.aggregations.Aggregation;
 import co.elastic.clients.elasticsearch._types.query_dsl.Query;
 import com.example.search.document.ProductDocument;
 import com.example.search.dto.SearchResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.elasticsearch.client.elc.ElasticsearchAggregations;
 import org.springframework.data.elasticsearch.client.elc.NativeQuery;
 import org.springframework.data.elasticsearch.client.elc.NativeQueryBuilder;
 import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
@@ -140,54 +142,48 @@ public class SearchService {
         qb.withAggregation("price_max", Aggregation.of(a -> a.max(m -> m.field("discountedPrice"))));
     }
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
     private SearchResponse.Facets extractFacets(SearchHits<ProductDocument> hits) {
         Map<String, Long> brands = new LinkedHashMap<>();
         Map<String, Long> categories = new LinkedHashMap<>();
         double priceMin = 0, priceMax = 0;
 
-        var aggs = hits.getAggregations();
-        if (aggs != null) {
-            // Spring Data ES 5.x wraps ES aggregations — pull them out as raw maps via JSON
-            var container = aggs.aggregations();
-            if (container != null) {
-                Map<String, Object> raw = (Map<String, Object>) (Map) container;
-                brands = extractBuckets(raw.get("brands"));
-                categories = extractBuckets(raw.get("categories"));
-                priceMin = extractNumeric(raw.get("price_min"));
-                priceMax = extractNumeric(raw.get("price_max"));
+        if (hits.getAggregations() instanceof ElasticsearchAggregations esAggs) {
+            try {
+                var aggMap = esAggs.aggregationsAsMap();
+
+                var brandAgg = aggMap.get("brands");
+                if (brandAgg != null) brands = extractBuckets(brandAgg.aggregation().getAggregate());
+
+                var catAgg = aggMap.get("categories");
+                if (catAgg != null) categories = extractBuckets(catAgg.aggregation().getAggregate());
+
+                var minAgg = aggMap.get("price_min");
+                if (minAgg != null) priceMin = extractNumeric(minAgg.aggregation().getAggregate());
+
+                var maxAgg = aggMap.get("price_max");
+                if (maxAgg != null) priceMax = extractNumeric(maxAgg.aggregation().getAggregate());
+            } catch (Exception e) {
+                log.warn("Failed to extract facets: {}", e.getMessage());
             }
         }
         return new SearchResponse.Facets(brands, categories,
                 new SearchResponse.PriceStats(priceMin, priceMax));
     }
 
-    @SuppressWarnings("unchecked")
-    private Map<String, Long> extractBuckets(Object agg) {
-        // Best-effort; aggregations API differs across client versions. Fall back to empty.
+    private Map<String, Long> extractBuckets(Aggregate aggregate) {
         Map<String, Long> out = new LinkedHashMap<>();
-        if (agg == null) return out;
-        try {
-            var aggregate = (co.elastic.clients.elasticsearch._types.aggregations.Aggregate) agg;
-            if (aggregate.isSterms()) {
-                aggregate.sterms().buckets().array()
-                        .forEach(b -> out.put(b.key().stringValue(), b.docCount()));
-            }
-        } catch (Exception ignored) {
-            // leave empty
+        if (aggregate == null) return out;
+        if (aggregate.isSterms()) {
+            aggregate.sterms().buckets().array()
+                    .forEach(b -> out.put(b.key().stringValue(), b.docCount()));
         }
         return out;
     }
 
-    private double extractNumeric(Object agg) {
-        if (agg == null) return 0;
-        try {
-            var aggregate = (co.elastic.clients.elasticsearch._types.aggregations.Aggregate) agg;
-            if (aggregate.isMin()) return aggregate.min().value();
-            if (aggregate.isMax()) return aggregate.max().value();
-        } catch (Exception ignored) {
-            // ignore
-        }
+    private double extractNumeric(Aggregate aggregate) {
+        if (aggregate == null) return 0;
+        if (aggregate.isMin()) return aggregate.min().value();
+        if (aggregate.isMax()) return aggregate.max().value();
         return 0;
     }
 }
