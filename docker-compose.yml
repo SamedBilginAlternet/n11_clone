@@ -436,7 +436,7 @@ services:
     build: ./services/api-gateway
     container_name: n11-gateway
     environment:
-      JAVA_TOOL_OPTIONS: "-Xms64m -Xmx128m"
+      JAVA_TOOL_OPTIONS: "-Xms64m -Xmx192m"
       EUREKA_URI: http://eureka-server:8761/eureka
       MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
       MANAGEMENT_OTLP_TRACING_ENDPOINT: http://otel-collector:4318/v1/traces
