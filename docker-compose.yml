@@ -22,11 +22,14 @@ services:
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
     container_name: n11-rabbitmq
+    hostname: n11-rabbitmq
+    user: rabbitmq
     environment:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
       RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "-rabbit vm_memory_high_watermark 0.85"
-      RABBITMQ_ERLANG_COOKIE: "n11-secret-cookie"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
     ports:
       - "${RABBITMQ_PORT:-15672}:5672"
       - "${RABBITMQ_MGMT_PORT:-25672}:15672"
@@ -470,3 +473,4 @@ volumes:
   grafana_data:
   loki_data:
   redis_data:
+  rabbitmq_data:
