@@ -29,3 +29,10 @@ scrape_configs:
         target_label: service
         regex: '([^:]+):\d+'
         replacement: '$1'
+
+  # Span metrics from OTel Collector (RED metrics for Jaeger SPM)
+  - job_name: otel-spanmetrics
+    static_configs:
+      - targets:
+          - otel-collector:8889
+    metrics_path: /metrics
