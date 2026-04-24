@@ -10,13 +10,14 @@ services:
       - "${POSTGRES_PORT:-15432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    command: postgres -c shared_buffers=64MB -c work_mem=4MB -c maintenance_work_mem=32MB -c effective_cache_size=128MB
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
-    entrypoint: ["sh", "-c", "echo '#!/bin/sh\npsql -U postgres -c \"CREATE DATABASE basketdb\" || true\npsql -U postgres -c \"CREATE DATABASE productdb\" || true\npsql -U postgres -c \"CREATE DATABASE orderdb\" || true\npsql -U postgres -c \"CREATE DATABASE paymentdb\" || true\npsql -U postgres -c \"CREATE DATABASE notificationdb\" || true\npsql -U postgres -c \"CREATE DATABASE reviewdb\" || true\npsql -U postgres -c \"CREATE DATABASE inventorydb\" || true' > /docker-entrypoint-initdb.d/01.sh && chmod +x /docker-entrypoint-initdb.d/01.sh && exec docker-entrypoint.sh postgres"]
+    entrypoint: ["sh", "-c", "echo '#!/bin/sh\npsql -U postgres -c \"CREATE DATABASE basketdb\" || true\npsql -U postgres -c \"CREATE DATABASE productdb\" || true\npsql -U postgres -c \"CREATE DATABASE orderdb\" || true\npsql -U postgres -c \"CREATE DATABASE paymentdb\" || true\npsql -U postgres -c \"CREATE DATABASE notificationdb\" || true\npsql -U postgres -c \"CREATE DATABASE reviewdb\" || true\npsql -U postgres -c \"CREATE DATABASE inventorydb\" || true' > /docker-entrypoint-initdb.d/01.sh && chmod +x /docker-entrypoint-initdb.d/01.sh && exec docker-entrypoint.sh postgres -c shared_buffers=64MB -c work_mem=4MB"]
 
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
@@ -24,7 +25,7 @@ services:
     environment:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
-      RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "-rabbit vm_memory_high_watermark 0.8"
+      RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "-rabbit vm_memory_high_watermark 0.85"
       RABBITMQ_ERLANG_COOKIE: "n11-secret-cookie"
     ports:
       - "${RABBITMQ_PORT:-15672}:5672"
@@ -48,11 +49,13 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
+    command: redis-server --maxmemory 64mb --maxmemory-policy allkeys-lru
 
   eureka-server:
     build: ./services/eureka-server
     container_name: n11-eureka
+    environment:
+      JAVA_TOOL_OPTIONS: "-Xms64m -Xmx128m"
     ports:
       - "${EUREKA_PORT:-18761}:8761"
     healthcheck:
@@ -60,7 +63,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-      start_period: 30s
+      start_period: 40s
     restart: on-failure
 
   otel-collector:
@@ -70,9 +73,9 @@ services:
     volumes:
       - ./infra/otel-collector/otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
     expose:
-      - "4317"   # OTLP gRPC (services send here)
-      - "4318"   # OTLP HTTP (services send here)
-      - "8889"   # Prometheus metrics (span metrics scraped here)
+      - "4317"
+      - "4318"
+      - "8889"
     depends_on:
       jaeger:
         condition: service_healthy
@@ -93,7 +96,7 @@ services:
       PROMETHEUS_QUERY_NORMALIZE_CALLS: "true"
       PROMETHEUS_QUERY_NORMALIZE_DURATION: "true"
     ports:
-      - "${JAEGER_UI_PORT:-26686}:16686"    # UI
+      - "${JAEGER_UI_PORT:-26686}:16686"
     depends_on:
       prometheus:
         condition: service_healthy
@@ -144,7 +147,8 @@ services:
     container_name: n11-prometheus
     command:
       - --config.file=/etc/prometheus/prometheus.yml
-      - --storage.tsdb.retention.time=3d
+      - --storage.tsdb.retention.time=1d
+      - --storage.tsdb.retention.size=256MB
     volumes:
       - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
@@ -187,23 +191,27 @@ services:
       - xpack.security.enabled=false
       - xpack.security.http.ssl.enabled=false
       - xpack.security.transport.ssl.enabled=false
-      - ES_JAVA_OPTS=-Xms256m -Xmx256m
+      - xpack.ml.enabled=false
+      - ES_JAVA_OPTS=-Xms128m -Xmx128m
     ports:
       - "${ELASTICSEARCH_PORT:-19200}:9200"
     volumes:
       - elasticsearch_data:/usr/share/elasticsearch/data
     healthcheck:
-      # cluster status "yellow" is normal on a single node (no replicas).
       test: ["CMD-SHELL", "curl -sf 'http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=2s' >/dev/null || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 10
       start_period: 40s
 
+  # ── Application Services ──────────────────────────────────────
+  # All JVMs capped at 192MB heap to fit in 8GB total RAM.
+
   auth-service:
     build: ./services/auth-service
     container_name: n11-auth
-    environment:
+    environment: &service-env-auth
+      JAVA_TOOL_OPTIONS: "-Xms64m -Xmx192m"
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/authdb
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
@@ -215,7 +223,7 @@ services:
       MANAGEMENT_OTLP_TRACING_ENDPOINT: http://otel-collector:4318/v1/traces
       JWT_ACCESS_TOKEN_EXPIRY: "900000"
       JWT_REFRESH_TOKEN_EXPIRY: "604800000"
-    depends_on:
+    depends_on: &depends-pg-rmq-eureka
       postgres:
         condition: service_healthy
       rabbitmq:
@@ -224,18 +232,19 @@ services:
         condition: service_healthy
     expose:
       - "8080"
-    healthcheck:
+    healthcheck: &service-healthcheck
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
       interval: 15s
       timeout: 5s
-      retries: 6
-      start_period: 40s
+      retries: 8
+      start_period: 60s
     restart: on-failure
 
   basket-service:
     build: ./services/basket-service
     container_name: n11-basket
     environment:
+      JAVA_TOOL_OPTIONS: "-Xms64m -Xmx192m"
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/basketdb
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
@@ -245,27 +254,19 @@ services:
       EUREKA_URI: http://eureka-server:8761/eureka
       MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
       MANAGEMENT_OTLP_TRACING_ENDPOINT: http://otel-collector:4318/v1/traces
-    depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      eureka-server:
-        condition: service_healthy
+    depends_on: *depends-pg-rmq-eureka
     expose:
       - "8081"
     healthcheck:
+      <<: *service-healthcheck
       test: ["CMD-SHELL", "wget -qO- http://localhost:8081/actuator/health || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 6
-      start_period: 40s
     restart: on-failure
 
   product-service:
     build: ./services/product-service
     container_name: n11-product
     environment:
+      JAVA_TOOL_OPTIONS: "-Xms64m -Xmx192m"
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/productdb
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
@@ -288,17 +289,15 @@ services:
     expose:
       - "8082"
     healthcheck:
+      <<: *service-healthcheck
       test: ["CMD-SHELL", "wget -qO- http://localhost:8082/actuator/health || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 6
-      start_period: 40s
     restart: on-failure
 
   order-service:
     build: ./services/order-service
     container_name: n11-order
     environment:
+      JAVA_TOOL_OPTIONS: "-Xms64m -Xmx192m"
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/orderdb
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
@@ -308,27 +307,19 @@ services:
       EUREKA_URI: http://eureka-server:8761/eureka
       MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
       MANAGEMENT_OTLP_TRACING_ENDPOINT: http://otel-collector:4318/v1/traces
-    depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      eureka-server:
-        condition: service_healthy
+    depends_on: *depends-pg-rmq-eureka
     expose:
       - "8083"
     healthcheck:
+      <<: *service-healthcheck
       test: ["CMD-SHELL", "wget -qO- http://localhost:8083/actuator/health || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 6
-      start_period: 40s
     restart: on-failure
 
   payment-service:
     build: ./services/payment-service
     container_name: n11-payment
     environment:
+      JAVA_TOOL_OPTIONS: "-Xms64m -Xmx192m"
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/paymentdb
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
@@ -338,27 +329,19 @@ services:
       EUREKA_URI: http://eureka-server:8761/eureka
       MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
       MANAGEMENT_OTLP_TRACING_ENDPOINT: http://otel-collector:4318/v1/traces
-    depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      eureka-server:
-        condition: service_healthy
+    depends_on: *depends-pg-rmq-eureka
     expose:
       - "8084"
     healthcheck:
+      <<: *service-healthcheck
       test: ["CMD-SHELL", "wget -qO- http://localhost:8084/actuator/health || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 6
-      start_period: 40s
     restart: on-failure
 
   notification-service:
     build: ./services/notification-service
     container_name: n11-notification
     environment:
+      JAVA_TOOL_OPTIONS: "-Xms64m -Xmx192m"
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/notificationdb
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
@@ -368,27 +351,19 @@ services:
       EUREKA_URI: http://eureka-server:8761/eureka
       MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
       MANAGEMENT_OTLP_TRACING_ENDPOINT: http://otel-collector:4318/v1/traces
-    depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      eureka-server:
-        condition: service_healthy
+    depends_on: *depends-pg-rmq-eureka
     expose:
       - "8085"
     healthcheck:
+      <<: *service-healthcheck
       test: ["CMD-SHELL", "wget -qO- http://localhost:8085/actuator/health || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 6
-      start_period: 40s
     restart: on-failure
 
   review-service:
     build: ./services/review-service
     container_name: n11-review
     environment:
+      JAVA_TOOL_OPTIONS: "-Xms64m -Xmx192m"
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/reviewdb
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
@@ -404,17 +379,15 @@ services:
     expose:
       - "8086"
     healthcheck:
+      <<: *service-healthcheck
       test: ["CMD-SHELL", "wget -qO- http://localhost:8086/actuator/health || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 6
-      start_period: 40s
     restart: on-failure
 
   inventory-service:
     build: ./services/inventory-service
     container_name: n11-inventory
     environment:
+      JAVA_TOOL_OPTIONS: "-Xms64m -Xmx192m"
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/inventorydb
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
@@ -423,27 +396,19 @@ services:
       EUREKA_URI: http://eureka-server:8761/eureka
       MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
       MANAGEMENT_OTLP_TRACING_ENDPOINT: http://otel-collector:4318/v1/traces
-    depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      eureka-server:
-        condition: service_healthy
+    depends_on: *depends-pg-rmq-eureka
     expose:
       - "8088"
     healthcheck:
+      <<: *service-healthcheck
       test: ["CMD-SHELL", "wget -qO- http://localhost:8088/actuator/health || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 6
-      start_period: 40s
     restart: on-failure
 
   search-service:
     build: ./services/search-service
     container_name: n11-search
     environment:
+      JAVA_TOOL_OPTIONS: "-Xms64m -Xmx192m"
       ELASTICSEARCH_URIS: http://elasticsearch:9200
       PRODUCT_SERVICE_URI: http://product-service:8082
       RABBITMQ_HOST: rabbitmq
@@ -463,26 +428,15 @@ services:
     expose:
       - "8087"
     healthcheck:
+      <<: *service-healthcheck
       test: ["CMD-SHELL", "wget -qO- http://localhost:8087/actuator/health || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 6
-      start_period: 40s
     restart: on-failure
 
   api-gateway:
     build: ./services/api-gateway
     container_name: n11-gateway
     environment:
-      AUTH_SERVICE_URI: http://auth-service:8080
-      BASKET_SERVICE_URI: http://basket-service:8081
-      PRODUCT_SERVICE_URI: http://product-service:8082
-      ORDER_SERVICE_URI: http://order-service:8083
-      PAYMENT_SERVICE_URI: http://payment-service:8084
-      NOTIFICATION_SERVICE_URI: http://notification-service:8085
-      REVIEW_SERVICE_URI: http://review-service:8086
-      SEARCH_SERVICE_URI: http://search-service:8087
-      INVENTORY_SERVICE_URI: http://inventory-service:8088
+      JAVA_TOOL_OPTIONS: "-Xms64m -Xmx128m"
       EUREKA_URI: http://eureka-server:8761/eureka
       MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
       MANAGEMENT_OTLP_TRACING_ENDPOINT: http://otel-collector:4318/v1/traces
@@ -495,8 +449,8 @@ services:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8000/actuator/health || exit 1"]
       interval: 15s
       timeout: 5s
-      retries: 6
-      start_period: 30s
+      retries: 8
+      start_period: 40s
     restart: on-failure
 
   frontend:
