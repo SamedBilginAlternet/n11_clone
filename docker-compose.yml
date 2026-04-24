@@ -90,10 +90,13 @@ services:
       COLLECTOR_OTLP_ENABLED: "true"
       METRICS_STORAGE_TYPE: prometheus
       PROMETHEUS_SERVER_URL: http://prometheus:9090
-      PROMETHEUS_QUERY_NAMESPACE: span_metrics
-      PROMETHEUS_QUERY_DURATION_UNIT: s
+      PROMETHEUS_QUERY_NORMALIZE_CALLS: "true"
+      PROMETHEUS_QUERY_NORMALIZE_DURATION: "true"
     ports:
       - "${JAEGER_UI_PORT:-26686}:16686"    # UI
+    depends_on:
+      prometheus:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:14269/ || exit 1"]
       interval: 10s
