@@ -63,15 +63,37 @@ services:
       start_period: 30s
     restart: on-failure
 
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.102.0
+    container_name: n11-otel-collector
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./infra/otel-collector/otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
+    expose:
+      - "4317"   # OTLP gRPC (services send here)
+      - "4318"   # OTLP HTTP (services send here)
+      - "8889"   # Prometheus metrics (span metrics scraped here)
+    depends_on:
+      jaeger:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:13133/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: on-failure
+
   jaeger:
     image: jaegertracing/all-in-one:1.57
     container_name: n11-jaeger
     environment:
       COLLECTOR_OTLP_ENABLED: "true"
+      METRICS_STORAGE_TYPE: prometheus
+      PROMETHEUS_SERVER_URL: http://prometheus:9090
+      PROMETHEUS_QUERY_NAMESPACE: span_metrics
+      PROMETHEUS_QUERY_DURATION_UNIT: s
     ports:
       - "${JAEGER_UI_PORT:-26686}:16686"    # UI
-      - "${JAEGER_GRPC_PORT:-14317}:4317"   # OTLP gRPC
-      - "${JAEGER_HTTP_PORT:-14318}:4318"   # OTLP HTTP
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:14269/ || exit 1"]
       interval: 10s
@@ -187,7 +209,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:-3f6a2b8c1d4e5f7a9b0c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a}
       EUREKA_URI: http://eureka-server:8761/eureka
       MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
-      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://otel-collector:4318/v1/traces
       JWT_ACCESS_TOKEN_EXPIRY: "900000"
       JWT_REFRESH_TOKEN_EXPIRY: "604800000"
     depends_on:
@@ -219,7 +241,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:-3f6a2b8c1d4e5f7a9b0c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a}
       EUREKA_URI: http://eureka-server:8761/eureka
       MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
-      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://otel-collector:4318/v1/traces
     depends_on:
       postgres:
         condition: service_healthy
@@ -250,7 +272,7 @@ services:
       RABBITMQ_PORT: "5672"
       EUREKA_URI: http://eureka-server:8761/eureka
       MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
-      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://otel-collector:4318/v1/traces
     depends_on:
       postgres:
         condition: service_healthy
@@ -282,7 +304,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:-3f6a2b8c1d4e5f7a9b0c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a}
       EUREKA_URI: http://eureka-server:8761/eureka
       MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
-      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://otel-collector:4318/v1/traces
     depends_on:
       postgres:
         condition: service_healthy
@@ -312,7 +334,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:-3f6a2b8c1d4e5f7a9b0c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a}
       EUREKA_URI: http://eureka-server:8761/eureka
       MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
-      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://otel-collector:4318/v1/traces
     depends_on:
       postgres:
         condition: service_healthy
@@ -342,7 +364,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:-3f6a2b8c1d4e5f7a9b0c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a}
       EUREKA_URI: http://eureka-server:8761/eureka
       MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
-      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://otel-collector:4318/v1/traces
     depends_on:
       postgres:
         condition: service_healthy
@@ -370,7 +392,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:-3f6a2b8c1d4e5f7a9b0c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a}
       EUREKA_URI: http://eureka-server:8761/eureka
       MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
-      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://otel-collector:4318/v1/traces
     depends_on:
       postgres:
         condition: service_healthy
@@ -397,7 +419,7 @@ services:
       RABBITMQ_PORT: "5672"
       EUREKA_URI: http://eureka-server:8761/eureka
       MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
-      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://otel-collector:4318/v1/traces
     depends_on:
       postgres:
         condition: service_healthy
@@ -425,7 +447,7 @@ services:
       RABBITMQ_PORT: "5672"
       EUREKA_URI: http://eureka-server:8761/eureka
       MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
-      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://otel-collector:4318/v1/traces
     depends_on:
       elasticsearch:
         condition: service_healthy
@@ -460,7 +482,7 @@ services:
       INVENTORY_SERVICE_URI: http://inventory-service:8088
       EUREKA_URI: http://eureka-server:8761/eureka
       MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
-      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://otel-collector:4318/v1/traces
     depends_on:
       eureka-server:
         condition: service_healthy
