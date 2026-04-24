@@ -24,8 +24,8 @@ services:
     environment:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
-      RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "-rabbit vm_memory_high_watermark 0.6"
-    mem_limit: 512m
+      RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "-rabbit vm_memory_high_watermark 0.8"
+      RABBITMQ_ERLANG_COOKIE: "n11-secret-cookie"
     ports:
       - "${RABBITMQ_PORT:-15672}:5672"
       - "${RABBITMQ_MGMT_PORT:-25672}:15672"
