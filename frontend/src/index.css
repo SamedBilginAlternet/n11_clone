@@ -2,12 +2,38 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  font-family: 'Inter', system-ui, sans-serif;
+@layer base {
+  :root {
+    --background: 0 0% 98%;
+    --foreground: 240 10% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 10%;
+    --primary: 267 60% 50%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 93 55% 41%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 240 5% 96%;
+    --muted-foreground: 240 4% 46%;
+    --accent: 44 95% 56%;
+    --accent-foreground: 240 10% 10%;
+    --destructive: 350 88% 45%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 240 6% 90%;
+    --input: 240 6% 90%;
+    --ring: 267 60% 50%;
+    --radius: 0.75rem;
+
+    font-family: 'Inter', system-ui, sans-serif;
+  }
 }
 
-body {
-  @apply bg-n11-gray text-gray-900 antialiased;
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
 }
 
 /* n11-style top nav gradient */
@@ -18,9 +44,4 @@ body {
 /* Category pill chips */
 .category-chip {
   @apply px-3 py-1.5 rounded-full bg-white shadow-sm hover:shadow-md transition-shadow text-sm font-medium border border-gray-200;
-}
-
-@keyframes slidein {
-  from { transform: translateY(8px); opacity: 0; }
-  to   { transform: translateY(0);   opacity: 1; }
 }

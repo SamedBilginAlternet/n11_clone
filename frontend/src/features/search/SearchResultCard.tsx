@@ -8,40 +8,40 @@ export function SearchResultCard({ product }: { product: SearchProduct }) {
   return (
     <Link
       to={`/product/${product.slug}`}
-      className="bg-white rounded-lg border border-gray-200 hover:shadow-lg transition-shadow overflow-hidden flex flex-col group"
+      className="group flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
     >
-      <div className="relative aspect-square bg-gray-50">
+      <div className="relative aspect-square overflow-hidden bg-muted">
         <img
           src={product.imageUrl}
           alt={product.name}
           loading="lazy"
-          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
         />
         {hasDiscount && (
-          <span className="absolute top-2 left-2 bg-n11-red text-white text-xs font-bold px-2 py-0.5 rounded">
+          <span className="absolute left-2 top-2 rounded-full bg-destructive px-2.5 py-1 text-[11px] font-bold text-white shadow">
             %{product.discountPercentage}
           </span>
         )}
       </div>
-      <div className="p-3 flex flex-col flex-1 gap-1">
+      <div className="flex flex-1 flex-col gap-1 p-3">
         {product.brand && (
-          <div className="text-[11px] uppercase tracking-wide text-gray-400 font-medium">
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
             {product.brand}
           </div>
         )}
-        <div className="text-sm text-gray-900 line-clamp-2 min-h-[2.5rem]">{product.name}</div>
-        <div className="flex items-center gap-1 text-xs text-gray-500 mt-1">
+        <div className="line-clamp-2 min-h-[2.5rem] text-sm font-medium text-foreground">{product.name}</div>
+        <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
           <RatingStars value={product.rating} size={12} />
           <span>({product.reviewCount})</span>
         </div>
         <div className="mt-auto pt-2">
           {hasDiscount ? (
             <>
-              <div className="text-xs text-gray-400 line-through">{formatTRY(product.price)}</div>
-              <div className="text-lg font-bold text-n11-green">{formatTRY(product.discountedPrice)}</div>
+              <div className="text-xs text-muted-foreground line-through">{formatTRY(product.price)}</div>
+              <div className="text-lg font-bold text-emerald-600">{formatTRY(product.discountedPrice)}</div>
             </>
           ) : (
-            <div className="text-lg font-bold text-n11-green">{formatTRY(product.price)}</div>
+            <div className="text-lg font-bold text-emerald-600">{formatTRY(product.price)}</div>
           )}
         </div>
       </div>

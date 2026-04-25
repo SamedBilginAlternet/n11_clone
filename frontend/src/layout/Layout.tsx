@@ -1,18 +1,32 @@
 import { Outlet } from 'react-router-dom';
 import { Navbar } from './Navbar';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export function Layout() {
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="flex min-h-screen flex-col bg-background">
       <Navbar />
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-6">
-        <Outlet />
-      </main>
-      <footer className="bg-n11-dark text-gray-300 text-sm py-6 mt-12">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row justify-between gap-3">
-          <div>© 2026 n11 Clone — Eğitim amaçlı demo.</div>
-          <div className="text-xs opacity-70">
-            7 mikroservis · Saga pattern · RabbitMQ · JWT · Spring Boot · React
+      <AnimatePresence mode="wait">
+        <motion.main
+          className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:px-8"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -12 }}
+          transition={{ duration: 0.2 }}
+        >
+          <Outlet />
+        </motion.main>
+      </AnimatePresence>
+      <footer className="border-t border-border bg-card mt-auto">
+        <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-8 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
+          <div className="text-sm text-muted-foreground">&copy; 2026 n11 Clone &mdash; Egitim amacli demo.</div>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground/60">
+            <span>10 Mikroservis</span>
+            <span>Saga Pattern</span>
+            <span>RabbitMQ</span>
+            <span>JWT</span>
+            <span>Spring Boot</span>
+            <span>React</span>
           </div>
         </div>
       </footer>

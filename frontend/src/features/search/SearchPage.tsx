@@ -1,10 +1,29 @@
 import { useSearchParams } from 'react-router-dom';
+import { Search as SearchIcon, ChevronLeft, ChevronRight } from 'lucide-react';
+
+function ErrorBanner({ message }: { message: string }) {
+  return (
+    <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-4 text-sm text-destructive">
+      {message}
+    </div>
+  );
+}
+
+function EmptyState() {
+  return (
+    <div className="flex flex-col items-center py-16">
+      <SearchIcon className="mb-4 h-12 w-12 text-muted-foreground/40" />
+      <p className="text-lg font-medium text-muted-foreground">Bu kriterlere uygun urun bulunamadi.</p>
+    </div>
+  );
+}
 import { useApi } from '../../shared/hooks/useApi';
 import { errorMessage } from '../../shared/api/problem';
 import { searchApi } from './api';
 import { SearchResultCard } from './SearchResultCard';
 import { FacetSidebar } from './FacetSidebar';
 import { SearchParams } from './types';
+import { Button } from '../../shared/ui/Button';
 
 export function SearchPage() {
   const [params, setParams] = useSearchParams();
@@ -23,16 +42,7 @@ export function SearchPage() {
 
   const { data, loading, error } = useApi(
     () => searchApi.search(parsed),
-    [
-      parsed.q,
-      parsed.category,
-      parsed.brand,
-      parsed.minPrice,
-      parsed.maxPrice,
-      parsed.minRating,
-      parsed.sort,
-      parsed.page,
-    ],
+    [parsed.q, parsed.category, parsed.brand, parsed.minPrice, parsed.maxPrice, parsed.minRating, parsed.sort, parsed.page],
   );
 
   const setSort = (sort: string) => {
@@ -48,84 +58,80 @@ export function SearchPage() {
     setParams(next);
   };
 
-  const heading = parsed.q ? `"${parsed.q}" için sonuçlar` : 'Tüm Ürünler';
+  const heading: string = parsed.q ? `"${parsed.q}" icin sonuclar` : 'Tum Urunler';
 
   return (
-    <div className="grid md:grid-cols-[260px_1fr] gap-6">
+    <div className="grid gap-6 md:grid-cols-[260px_1fr]">
       <FacetSidebar facets={data?.facets} />
 
-      <section className="space-y-4 min-w-0">
-        <div className="flex items-center justify-between gap-4 flex-wrap">
+      <section className="min-w-0 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-xl font-bold">{heading}</h1>
-            <p className="text-sm text-gray-500 mt-1">
-              {data ? `${data.totalElements} ürün bulundu` : 'Aranıyor...'}
+            <p className="mt-1 text-sm text-muted-foreground">
+              {data ? `${String((data as any).totalElements)} urun bulundu` : 'Araniyor...'}
               {parsed.q && (
-                <span className="ml-2 text-xs text-gray-400">
-                  · Elasticsearch · fuzzy matching açık
+                <span className="ml-2 text-xs text-muted-foreground/60">
+                  Elasticsearch fuzzy matching
                 </span>
               )}
             </p>
           </div>
-          <label className="flex items-center gap-2 text-sm">
-            Sırala:
-            <select
-              value={parsed.sort}
-              onChange={(e) => setSort(e.target.value)}
-              className="border border-gray-300 rounded px-2 py-1 text-sm"
-            >
-              <option value="relevance">İlgi düzeyi</option>
-              <option value="price_asc">Fiyat: Artan</option>
-              <option value="price_desc">Fiyat: Azalan</option>
-              <option value="rating_desc">En yüksek puan</option>
-            </select>
-          </label>
+          <select
+            value={parsed.sort}
+            onChange={(e) => setSort(e.target.value)}
+            className="h-10 rounded-lg border border-border bg-card px-3 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-ring"
+          >
+            <option value="relevance">Ilgi duzeyi</option>
+            <option value="price_asc">Fiyat: Artan</option>
+            <option value="price_desc">Fiyat: Azalan</option>
+            <option value="rating_desc">En yuksek puan</option>
+          </select>
         </div>
 
-        {error ? (
-          <div className="bg-red-50 text-red-700 p-3 rounded">{errorMessage(error)}</div>
-        ) : null}
+        {error ? <ErrorBanner message={errorMessage(error)} /> : null}
 
         {loading ? (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
             {Array.from({ length: 12 }).map((_, i) => (
-              <div
-                key={i}
-                className="aspect-[3/4] bg-white border border-gray-200 rounded-lg animate-pulse"
-              />
+              <div key={i} className="animate-pulse space-y-3">
+                <div className="aspect-square rounded-xl bg-muted" />
+                <div className="h-3 w-3/4 rounded bg-muted" />
+                <div className="h-5 w-1/3 rounded bg-muted" />
+              </div>
             ))}
           </div>
         ) : data && data.content.length === 0 ? (
-          <div className="text-center text-gray-500 py-12 bg-white rounded-lg border border-gray-200">
-            Bu kriterlere uygun ürün bulunamadı.
-          </div>
+          <EmptyState />
         ) : (
           <>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
               {data?.content.map((p) => (
                 <SearchResultCard key={p.id} product={p} />
               ))}
             </div>
 
             {data && data.totalPages > 1 && (
-              <div className="flex items-center justify-center gap-2 pt-4">
-                <button
+              <div className="flex items-center justify-center gap-3 pt-6">
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => setPage(Math.max(0, (parsed.page ?? 0) - 1))}
                   disabled={(parsed.page ?? 0) === 0}
-                  className="px-3 py-1.5 border border-gray-300 rounded disabled:opacity-50"
                 >
-                  ← Önceki
-                </button>
-                <span className="text-sm text-gray-600">
+                  <ChevronLeft className="h-4 w-4" /> Onceki
+                </Button>
+                <span className="text-sm text-muted-foreground">
                   Sayfa {data.page + 1} / {data.totalPages}
                 </span>
-                <button
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => setPage(Math.min(data.totalPages - 1, (parsed.page ?? 0) + 1))}
                   disabled={(parsed.page ?? 0) >= data.totalPages - 1}
-                  className="px-3 py-1.5 border border-gray-300 rounded disabled:opacity-50"
                 >
-                  Sonraki →
-                </button>
+                  Sonraki <ChevronRight className="h-4 w-4" />
+                </Button>
               </div>
             )}
           </>

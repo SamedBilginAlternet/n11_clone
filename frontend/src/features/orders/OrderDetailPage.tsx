@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { ArrowLeft, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { useApi } from '../../shared/hooks/useApi';
 import { formatDateTime, formatTRY } from '../../shared/utils/format';
 import { Card } from '../../shared/ui/Card';
@@ -12,7 +14,7 @@ import { errorMessage } from '../../shared/api/problem';
 export function OrderDetailPage() {
   const { id } = useParams<{ id: string }>();
   const orderId = Number(id);
-  const { data: order, loading, error, refetch, setData } = useApi(
+  const { data: order, loading, error, setData } = useApi(
     () => orderApi.get(orderId),
     [orderId],
   );
@@ -20,126 +22,130 @@ export function OrderDetailPage() {
   const [payment, setPayment] = useState<Payment | null>(null);
   const pollRef = useRef<number | null>(null);
 
-  // Poll while PENDING — saga updates the status out-of-band via events.
   useEffect(() => {
     if (!order) return;
     if (order.status !== 'PENDING') {
-      if (pollRef.current) {
-        window.clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
-      // Also fetch payment record so we can show the transaction ID.
+      if (pollRef.current) { window.clearInterval(pollRef.current); pollRef.current = null; }
       paymentApi.getByOrder(order.id).then(setPayment).catch(() => setPayment(null));
       return;
     }
-
     pollRef.current = window.setInterval(() => {
       orderApi.get(order.id).then(setData).catch(() => {});
     }, 2000);
-
-    return () => {
-      if (pollRef.current) window.clearInterval(pollRef.current);
-    };
+    return () => { if (pollRef.current) window.clearInterval(pollRef.current); };
   }, [order, setData]);
 
-  if (loading) return <div className="text-gray-500">Sipariş yükleniyor...</div>;
-  if (error) return <div className="bg-red-50 text-red-700 p-3 rounded">{errorMessage(error)}</div>;
+  if (loading) return <div className="flex justify-center py-20"><Spinner size={32} /></div>;
+  if (error) return <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-4 text-sm text-destructive">{errorMessage(error)}</div>;
   if (!order) return null;
 
   return (
-    <div className="grid md:grid-cols-3 gap-6">
-      <div className="md:col-span-2 space-y-4">
-        <Card className="p-4 flex items-center justify-between">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid gap-6 lg:grid-cols-3">
+      <div className="space-y-4 lg:col-span-2">
+        {/* Header */}
+        <Card className="flex items-center justify-between p-5">
           <div>
-            <div className="text-xs text-gray-500">Sipariş No</div>
-            <div className="font-bold text-lg">#{order.id}</div>
-            <div className="text-xs text-gray-500 mt-1">{formatDateTime(order.createdAt)}</div>
+            <div className="text-xs text-muted-foreground">Siparis No</div>
+            <div className="text-2xl font-bold">#{order.id}</div>
+            <div className="mt-1 text-xs text-muted-foreground">{formatDateTime(order.createdAt)}</div>
           </div>
           <OrderStatusBadge status={order.status} />
         </Card>
 
+        {/* Status banners */}
         {order.status === 'PENDING' && (
-          <Card className="p-4 flex items-center gap-3 bg-blue-50 border-blue-200">
-            <Spinner className="text-n11-purple" />
+          <Card className="flex items-center gap-4 border-blue-200 bg-blue-50 p-5">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-100">
+              <Clock className="h-5 w-5 text-blue-600 animate-pulse" />
+            </div>
             <div>
-              <div className="font-semibold text-blue-900">Ödemen işleniyor...</div>
+              <div className="font-semibold text-blue-900">Odemen isleniyor...</div>
               <div className="text-xs text-blue-800">
-                payment-service siparişini kontrol ediyor, sonuç saga üzerinden gelecek. Bu ekran
-                otomatik güncelleniyor.
+                payment-service siparisini kontrol ediyor. Bu ekran otomatik guncelleniyor.
               </div>
             </div>
           </Card>
         )}
 
         {order.status === 'PAID' && (
-          <Card className="p-4 bg-green-50 border-green-200 text-green-900">
-            <div className="font-semibold">Ödemen başarıyla tamamlandı ✓</div>
-            {payment && (
-              <div className="text-xs mt-1">
-                İşlem no: <code className="bg-white px-1 rounded">{payment.transactionId}</code>
-              </div>
-            )}
+          <Card className="flex items-center gap-4 border-emerald-200 bg-emerald-50 p-5">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100">
+              <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+            </div>
+            <div>
+              <div className="font-semibold text-emerald-900">Odeme basariyla tamamlandi</div>
+              {payment && (
+                <div className="mt-0.5 text-xs text-emerald-800">
+                  Islem no: <code className="rounded bg-white px-1.5 py-0.5">{payment.transactionId}</code>
+                </div>
+              )}
+            </div>
           </Card>
         )}
 
         {(order.status === 'CANCELLED' || order.status === 'FAILED') && (
-          <Card className="p-4 bg-red-50 border-red-200 text-red-900">
-            <div className="font-semibold">Sipariş alınamadı</div>
-            {order.failureReason && <div className="text-xs mt-1">{order.failureReason}</div>}
-            <button
-              onClick={() => void refetch()}
-              className="text-xs underline text-red-700 mt-2"
-            >
-              Tekrar dene
-            </button>
+          <Card className="flex items-center gap-4 border-red-200 bg-red-50 p-5">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-100">
+              <XCircle className="h-5 w-5 text-red-600" />
+            </div>
+            <div>
+              <div className="font-semibold text-red-900">Siparis alinamadi</div>
+              {order.failureReason && <div className="mt-0.5 text-xs text-red-800">{order.failureReason}</div>}
+            </div>
           </Card>
         )}
 
-        <Card className="p-4">
-          <h2 className="font-semibold mb-2">Ürünler</h2>
-          <div className="space-y-3">
+        {/* Items */}
+        <Card className="p-5">
+          <h2 className="mb-4 font-semibold">Urunler</h2>
+          <div className="divide-y">
             {order.items.map((item) => (
-              <div key={item.id} className="flex gap-3 pb-3 border-b last:border-b-0 last:pb-0">
+              <div key={item.id} className="flex items-center gap-4 py-3 first:pt-0 last:pb-0">
                 {item.imageUrl && (
-                  <img src={item.imageUrl} alt={item.productName} className="w-14 h-14 rounded object-cover" />
+                  <img src={item.imageUrl} alt={item.productName} className="h-14 w-14 shrink-0 rounded-lg object-cover" />
                 )}
-                <div className="flex-1 min-w-0">
+                <div className="min-w-0 flex-1">
                   <div className="text-sm font-medium line-clamp-1">{item.productName}</div>
-                  <div className="text-xs text-gray-500">
-                    {formatTRY(item.productPrice)} × {item.quantity}
+                  <div className="text-xs text-muted-foreground">
+                    {formatTRY(item.productPrice)} x {item.quantity}
                   </div>
                 </div>
-                <div className="font-bold">{formatTRY(item.subtotal)}</div>
+                <div className="shrink-0 font-bold">{formatTRY(item.subtotal)}</div>
               </div>
             ))}
           </div>
         </Card>
 
         {order.shippingAddress && (
-          <Card className="p-4">
-            <h2 className="font-semibold mb-1">Teslimat Adresi</h2>
-            <div className="text-sm text-gray-700">{order.shippingAddress}</div>
+          <Card className="p-5">
+            <h2 className="mb-1 font-semibold">Teslimat Adresi</h2>
+            <div className="text-sm text-muted-foreground">{order.shippingAddress}</div>
           </Card>
         )}
       </div>
 
-      <Card className="p-4 h-fit">
-        <h2 className="font-bold mb-3">Sipariş Özeti</h2>
-        <div className="flex justify-between text-sm text-gray-600 mb-1">
-          <span>Ürün adedi</span>
-          <span>{order.items.reduce((s, i) => s + i.quantity, 0)}</span>
+      {/* Summary sidebar */}
+      <Card className="h-fit p-6">
+        <h2 className="mb-4 text-lg font-bold">Siparis Ozeti</h2>
+        <div className="space-y-2 text-sm">
+          <div className="flex justify-between text-muted-foreground">
+            <span>Urun adedi</span>
+            <span>{order.items.reduce((s, i) => s + i.quantity, 0)}</span>
+          </div>
         </div>
-        <div className="border-t pt-2 mt-2 flex justify-between font-bold">
-          <span>Toplam</span>
-          <span className="text-n11-purple text-lg">{formatTRY(order.totalAmount)}</span>
+        <div className="mt-4 border-t pt-4">
+          <div className="flex items-center justify-between">
+            <span className="text-lg font-bold">Toplam</span>
+            <span className="text-2xl font-extrabold text-primary">{formatTRY(order.totalAmount)}</span>
+          </div>
         </div>
         <Link
           to="/orders"
-          className="block mt-4 text-center text-sm text-n11-purple font-medium hover:underline"
+          className="mt-6 flex items-center justify-center gap-1.5 text-sm font-medium text-primary hover:underline"
         >
-          ← Tüm siparişlerim
+          <ArrowLeft className="h-4 w-4" /> Tum siparislerim
         </Link>
       </Card>
-    </div>
+    </motion.div>
   );
 }

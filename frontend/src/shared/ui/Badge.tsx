@@ -1,26 +1,31 @@
 import { HTMLAttributes } from 'react';
+import { cva, type VariantProps } from 'class-variance-authority';
+import { cn } from '../utils/cn';
 
-type Tone = 'neutral' | 'success' | 'warning' | 'danger' | 'info';
-
-const TONES: Record<Tone, string> = {
-  neutral: 'bg-gray-100 text-gray-700',
-  success: 'bg-green-100 text-green-800',
-  warning: 'bg-orange-100 text-orange-800',
-  danger: 'bg-red-100 text-red-800',
-  info: 'bg-purple-100 text-purple-800',
-};
+const badgeVariants = cva(
+  'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold transition-colors',
+  {
+    variants: {
+      tone: {
+        neutral: 'bg-muted text-muted-foreground',
+        success: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400',
+        warning: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
+        danger: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+        info: 'bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-400',
+      },
+    },
+    defaultVariants: { tone: 'neutral' },
+  },
+);
 
 export function Badge({
-  tone = 'neutral',
-  className = '',
+  tone,
+  className,
   children,
   ...rest
-}: HTMLAttributes<HTMLSpanElement> & { tone?: Tone }) {
+}: HTMLAttributes<HTMLSpanElement> & VariantProps<typeof badgeVariants>) {
   return (
-    <span
-      {...rest}
-      className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${TONES[tone]} ${className}`}
-    >
+    <span className={cn(badgeVariants({ tone }), className)} {...rest}>
       {children}
     </span>
   );

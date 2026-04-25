@@ -1,50 +1,54 @@
 import { ButtonHTMLAttributes, forwardRef } from 'react';
+import { cva, type VariantProps } from 'class-variance-authority';
+import { Loader2 } from 'lucide-react';
+import { cn } from '../utils/cn';
 
-type Variant = 'primary' | 'secondary' | 'success' | 'ghost' | 'danger';
-type Size = 'sm' | 'md' | 'lg';
+const buttonVariants = cva(
+  'inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98]',
+  {
+    variants: {
+      variant: {
+        primary: 'bg-primary text-primary-foreground shadow-md hover:shadow-lg hover:brightness-110',
+        secondary: 'bg-secondary text-secondary-foreground shadow-md hover:shadow-lg hover:brightness-110',
+        success: 'bg-emerald-600 text-white shadow-md hover:shadow-lg hover:bg-emerald-700',
+        ghost: 'hover:bg-accent/10 text-foreground',
+        danger: 'bg-destructive text-destructive-foreground shadow-md hover:shadow-lg hover:brightness-110',
+        outline: 'border border-border bg-background hover:bg-accent/5 text-foreground',
+      },
+      size: {
+        sm: 'h-8 px-3 text-xs',
+        md: 'h-10 px-4 text-sm',
+        lg: 'h-12 px-6 text-base',
+        icon: 'h-10 w-10',
+      },
+    },
+    defaultVariants: {
+      variant: 'primary',
+      size: 'md',
+    },
+  },
+);
 
-interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: Variant;
-  size?: Size;
+export interface ButtonProps
+  extends ButtonHTMLAttributes<HTMLButtonElement>,
+    VariantProps<typeof buttonVariants> {
   fullWidth?: boolean;
   loading?: boolean;
 }
 
-const VARIANTS: Record<Variant, string> = {
-  primary: 'bg-n11-purple text-white hover:bg-purple-700 disabled:bg-purple-300',
-  secondary: 'bg-n11-orange text-white hover:bg-orange-600 disabled:bg-orange-300',
-  success: 'bg-n11-green text-white hover:bg-green-700 disabled:bg-green-300',
-  ghost: 'bg-transparent text-gray-700 hover:bg-gray-100 border border-gray-300',
-  danger: 'bg-red-600 text-white hover:bg-red-700 disabled:bg-red-300',
-};
-
-const SIZES: Record<Size, string> = {
-  sm: 'px-3 py-1.5 text-sm',
-  md: 'px-4 py-2 text-sm',
-  lg: 'px-5 py-2.5 text-base font-semibold',
-};
-
-export const Button = forwardRef<HTMLButtonElement, Props>(function Button(
-  { variant = 'primary', size = 'md', fullWidth, loading, disabled, className = '', children, ...rest },
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
+  { variant, size, fullWidth, loading, disabled, className, children, ...rest },
   ref,
 ) {
   return (
     <button
       ref={ref}
       disabled={disabled || loading}
-      className={`rounded-md font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
-        VARIANTS[variant]
-      } ${SIZES[size]} ${fullWidth ? 'w-full' : ''} ${className}`}
+      className={cn(buttonVariants({ variant, size }), fullWidth && 'w-full', className)}
       {...rest}
     >
-      {loading ? (
-        <span className="inline-flex items-center gap-2">
-          <span className="inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-          {children}
-        </span>
-      ) : (
-        children
-      )}
+      {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+      {children}
     </button>
   );
 });
