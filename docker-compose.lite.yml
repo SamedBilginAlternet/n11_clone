@@ -1,5 +1,5 @@
 # Lite deployment: 4 GB RAM sunucular için
-# Çıkarılanlar: Elasticsearch, Search Service, Observability stack (Jaeger, Loki, Promtail, Prometheus, Grafana, OTel)
+# Çıkarılanlar: Observability stack (Jaeger, Loki, Promtail, Prometheus, Grafana, OTel)
 # JVM heap'ler 96 MB'a düşürüldü
 
 services:
@@ -60,6 +60,28 @@ services:
       timeout: 5s
       retries: 5
     command: redis-server --maxmemory 32mb --maxmemory-policy allkeys-lru
+    restart: on-failure
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.14.0
+    container_name: n11-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - xpack.security.http.ssl.enabled=false
+      - xpack.security.transport.ssl.enabled=false
+      - xpack.ml.enabled=false
+      - ES_JAVA_OPTS=-Xms128m -Xmx128m
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    expose:
+      - "9200"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 20
+      start_period: 90s
     restart: on-failure
 
   eureka-server:
@@ -212,6 +234,33 @@ services:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8086/actuator/health || exit 1"]
     restart: on-failure
 
+  search-service:
+    build: ./services/search-service
+    container_name: n11-search
+    environment:
+      JAVA_TOOL_OPTIONS: "-Xms32m -Xmx96m"
+      ELASTICSEARCH_URIS: http://elasticsearch:9200
+      PRODUCT_SERVICE_URI: http://product-service:8082
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: "5672"
+      EUREKA_URI: http://eureka-server:8761/eureka
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "0"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      product-service:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+    expose:
+      - "8087"
+    healthcheck:
+      <<: *service-healthcheck
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8087/actuator/health || exit 1"]
+    restart: on-failure
+
   inventory-service:
     build: ./services/inventory-service
     container_name: n11-inventory
@@ -260,3 +309,4 @@ volumes:
   postgres_data:
   redis_data:
   rabbitmq_data:
+  elasticsearch_data:
