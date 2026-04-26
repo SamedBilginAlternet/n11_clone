@@ -1,0 +1,262 @@
+# Lite deployment: 4 GB RAM sunucular için
+# Çıkarılanlar: Elasticsearch, Search Service, Observability stack (Jaeger, Loki, Promtail, Prometheus, Grafana, OTel)
+# JVM heap'ler 96 MB'a düşürüldü
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: n11-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: authdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    command: postgres -c shared_buffers=48MB -c work_mem=2MB -c maintenance_work_mem=16MB -c effective_cache_size=96MB -c max_connections=50
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    entrypoint: ["sh", "-c", "echo '#!/bin/sh\npsql -U postgres -c \"CREATE DATABASE basketdb\" || true\npsql -U postgres -c \"CREATE DATABASE productdb\" || true\npsql -U postgres -c \"CREATE DATABASE orderdb\" || true\npsql -U postgres -c \"CREATE DATABASE paymentdb\" || true\npsql -U postgres -c \"CREATE DATABASE notificationdb\" || true\npsql -U postgres -c \"CREATE DATABASE reviewdb\" || true\npsql -U postgres -c \"CREATE DATABASE inventorydb\" || true' > /docker-entrypoint-initdb.d/01.sh && chmod +x /docker-entrypoint-initdb.d/01.sh && exec docker-entrypoint.sh postgres -c shared_buffers=48MB -c work_mem=2MB"]
+    restart: on-failure
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: n11-rabbitmq
+    hostname: n11-rabbitmq
+    user: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-guest}
+      RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "-rabbit vm_memory_high_watermark 0.6"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    expose:
+      - "5672"
+    ports:
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: on-failure
+
+  redis:
+    image: redis:7-alpine
+    container_name: n11-redis
+    expose:
+      - "6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: redis-server --maxmemory 32mb --maxmemory-policy allkeys-lru
+    restart: on-failure
+
+  eureka-server:
+    build: ./services/eureka-server
+    container_name: n11-eureka
+    environment:
+      JAVA_TOOL_OPTIONS: "-Xms32m -Xmx80m"
+    expose:
+      - "8761"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8761/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+    restart: on-failure
+
+  auth-service:
+    build: ./services/auth-service
+    container_name: n11-auth
+    environment: &service-env
+      JAVA_TOOL_OPTIONS: "-Xms32m -Xmx96m"
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/authdb
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: "5672"
+      JWT_SECRET: ${JWT_SECRET:-3f6a2b8c1d4e5f7a9b0c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a}
+      EUREKA_URI: http://eureka-server:8761/eureka
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "0"
+      JWT_ACCESS_TOKEN_EXPIRY: "900000"
+      JWT_REFRESH_TOKEN_EXPIRY: "604800000"
+    depends_on: &depends-pg-rmq-eureka
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+    expose:
+      - "8080"
+    healthcheck: &service-healthcheck
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 60s
+    restart: on-failure
+
+  basket-service:
+    build: ./services/basket-service
+    container_name: n11-basket
+    environment:
+      <<: *service-env
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/basketdb
+    depends_on: *depends-pg-rmq-eureka
+    expose:
+      - "8081"
+    healthcheck:
+      <<: *service-healthcheck
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/actuator/health || exit 1"]
+    restart: on-failure
+
+  product-service:
+    build: ./services/product-service
+    container_name: n11-product
+    environment:
+      <<: *service-env
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/productdb
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: "6379"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+    expose:
+      - "8082"
+    healthcheck:
+      <<: *service-healthcheck
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8082/actuator/health || exit 1"]
+    restart: on-failure
+
+  order-service:
+    build: ./services/order-service
+    container_name: n11-order
+    environment:
+      <<: *service-env
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/orderdb
+    depends_on: *depends-pg-rmq-eureka
+    expose:
+      - "8083"
+    healthcheck:
+      <<: *service-healthcheck
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8083/actuator/health || exit 1"]
+    restart: on-failure
+
+  payment-service:
+    build: ./services/payment-service
+    container_name: n11-payment
+    environment:
+      <<: *service-env
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/paymentdb
+    depends_on: *depends-pg-rmq-eureka
+    expose:
+      - "8084"
+    healthcheck:
+      <<: *service-healthcheck
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8084/actuator/health || exit 1"]
+    restart: on-failure
+
+  notification-service:
+    build: ./services/notification-service
+    container_name: n11-notification
+    environment:
+      <<: *service-env
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/notificationdb
+    depends_on: *depends-pg-rmq-eureka
+    expose:
+      - "8085"
+    healthcheck:
+      <<: *service-healthcheck
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8085/actuator/health || exit 1"]
+    restart: on-failure
+
+  review-service:
+    build: ./services/review-service
+    container_name: n11-review
+    environment:
+      JAVA_TOOL_OPTIONS: "-Xms32m -Xmx96m"
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/reviewdb
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      JWT_SECRET: ${JWT_SECRET:-3f6a2b8c1d4e5f7a9b0c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a}
+      EUREKA_URI: http://eureka-server:8761/eureka
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "0"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+    expose:
+      - "8086"
+    healthcheck:
+      <<: *service-healthcheck
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8086/actuator/health || exit 1"]
+    restart: on-failure
+
+  inventory-service:
+    build: ./services/inventory-service
+    container_name: n11-inventory
+    environment:
+      <<: *service-env
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/inventorydb
+    depends_on: *depends-pg-rmq-eureka
+    expose:
+      - "8088"
+    healthcheck:
+      <<: *service-healthcheck
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8088/actuator/health || exit 1"]
+    restart: on-failure
+
+  api-gateway:
+    build: ./services/api-gateway
+    container_name: n11-gateway
+    environment:
+      JAVA_TOOL_OPTIONS: "-Xms32m -Xmx80m"
+      EUREKA_URI: http://eureka-server:8761/eureka
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "0"
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8000/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 40s
+    restart: on-failure
+
+  frontend:
+    build: ./frontend
+    container_name: n11-frontend
+    depends_on:
+      api-gateway:
+        condition: service_started
+    ports:
+      - "80:80"
+    restart: on-failure
+
+volumes:
+  postgres_data:
+  redis_data:
+  rabbitmq_data:
